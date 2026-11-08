@@ -27,6 +27,8 @@ android {
         }
     }
     compileOptions {
+        // java.time etc. on Android 7.1 (original Peloton Bike OS)
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -52,6 +54,7 @@ android {
 
 dependencies {
     implementation(project(":core"))
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")

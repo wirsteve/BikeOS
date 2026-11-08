@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FF07090D" android:pathData="M24,0h60a24,24 0,0 1,24 24v60a24,24 0,0 1,-24 24h-60a24,24 0,0 1,-24 -24v-60a24,24 0,0 1,24 -24z" />
+    <!-- wheels -->
+    <path android:strokeColor="#FF2EE6A8" android:strokeWidth="6" android:fillColor="#00000000"
+        android:pathData="M33,70m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0" />
+    <path android:strokeColor="#FF2EE6A8" android:strokeWidth="6" android:fillColor="#00000000"
+        android:pathData="M75,70m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0" />
+    <!-- frame -->
+    <path android:strokeColor="#FFF2F5F9" android:strokeWidth="6" android:strokeLineJoin="round" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M33,70 L48,44 L68,44 L75,70 M48,44 L56,70 L68,44 M44,36 L54,36 M66,44 L64,34 L72,32" />
+    <!-- power bolt -->
+    <path android:fillColor="#FFFF7A2F" android:pathData="M58,14 L46,32 L55,32 L50,46 L64,26 L55,26 Z" />
+</vector>

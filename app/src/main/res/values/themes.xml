@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.BikeOS" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bikeos_bg</item>
+        <item name="android:statusBarColor">@color/bikeos_bg</item>
+        <item name="android:navigationBarColor">@color/bikeos_bg</item>
+        <item name="android:colorAccent">@color/bikeos_accent</item>
+        <item name="android:windowShowWallpaper">false</item>
+    </style>
+    <color name="bikeos_bg">#FF07090D</color>
+    <color name="bikeos_accent">#FF2EE6A8</color>
+</resources>
