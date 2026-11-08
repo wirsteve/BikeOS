@@ -73,7 +73,7 @@ class WebActivity : ComponentActivity() {
     private var mobileUa: String = ""
 
     private var urlText by mutableStateOf("")
-    private var progress by mutableIntStateOf(0)
+    private var loadProgress by mutableIntStateOf(0)
     private var desktop by mutableStateOf(false)
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -111,7 +111,7 @@ class WebActivity : ComponentActivity() {
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, newProgress: Int) {
-                    progress = newProgress
+                    loadProgress = newProgress
                 }
 
                 override fun onPermissionRequest(request: PermissionRequest) {
@@ -167,7 +167,7 @@ class WebActivity : ComponentActivity() {
                             web.reload()
                         }) { Icon(if (desktop) Icons.Default.Computer else Icons.Default.PhoneAndroid, "Desktop site") }
                     }
-                    if (progress in 1..99) LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth().height(2.dp))
+                    if (loadProgress in 1..99) LinearProgressIndicator(progress = { loadProgress / 100f }, modifier = Modifier.fillMaxWidth().height(2.dp))
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         AndroidView(factory = {
                             FrameLayout(it).also { fl ->
