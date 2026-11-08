@@ -43,7 +43,7 @@ At startup, BikeOS reads (never modifies) the installed APK of Peloton's sensor 
 Results are under **Settings → Bike sensor → Bike check**.
 
 ### How it's tested
-- **55+ JVM unit tests** (`./gradlew :core:test`): sensor parcel decoding, ride maths, power zones, workouts, Bluetooth FTMS/CPS/CSC encoding, TCX export, the safety allowlist, the resistance limiter, the DEX scanner (including obfuscated and renumbered code) and the Wi-Fi dashboard.
+- **43 JVM unit tests** (`./gradlew :core:test`): sensor parcel decoding, ride maths, power zones, workouts, Bluetooth FTMS/CPS/CSC encoding, TCX export, the safety allowlist, the resistance limiter, the DEX scanner (including obfuscated and renumbered code) and the Wi-Fi dashboard.
 - **On-device tests on Android emulators matching the Peloton tablets**: API 25 / Android 7.1 (Bike) and API 29 / Android 10 (Bike+), on a tablet-sized screen, run in CI on every push. They:
   - check that the scanner reads **real AIDL compiler output** correctly
   - check that the guard blocks every non-allowlisted call before it is sent
