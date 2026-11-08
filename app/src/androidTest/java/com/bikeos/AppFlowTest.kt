@@ -6,6 +6,8 @@ import android.os.Build
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -61,7 +63,10 @@ class AppFlowTest {
     private fun shot(name: String) {
         if (Build.VERSION.SDK_INT < 26) return
         runCatching {
-            val bmp = compose.onRoot().captureToImage().asAndroidBitmap()
+            // A dialog adds a second root; capture the top-most one.
+            val bmp = runCatching { compose.onRoot().captureToImage() }
+                .getOrElse { compose.onAllNodes(isRoot()).onLast().captureToImage() }
+                .asAndroidBitmap()
             val dir = File(ctx.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
             File(dir, "api${Build.VERSION.SDK_INT}_$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
@@ -131,6 +136,19 @@ class AppFlowTest {
         val xml = tcx.readText()
         assertTrue(xml.contains("<Trackpoint>") && xml.contains("<ns3:Watts>"))
         shot("ride_detail")
+    }
+
+    /** A structured class in progress: targets, countdown, resistance prompts. */
+    @Test fun workoutInProgress() {
+        waitForText("Just Ride")
+        compose.waitUntil(10_000) { g.sensors.status.value.state == com.bikeos.sensor.SensorState.CONNECTED }
+        val climb = g.workouts.find("climb-30")!!
+        runOnMain { g.ride.startWorkout(climb) }
+        waitForText("End ride")
+        compose.waitUntil(15_000) { g.ride.state.value.stats.elapsedSec >= 8 }
+        shot("workout_live")
+        assertTrue(g.ride.state.value.progress?.segment?.cadence != null)
+        runOnMain { g.ride.finish(save = false) }
     }
 
     @Test fun pedalingAutoStartsARide() {

@@ -84,8 +84,13 @@ jobs:
           force-avd-creation: false
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # Each line runs separately. The connected task uninstalls the app (and its screenshots) when it
+          # finishes, so screenshots come from a second run that leaves the app installed.
           script: |
             ./gradlew --no-daemon :app:connectedDebugAndroidTest || (adb logcat -d -t 3000 | grep -iE "BikeOS|AndroidRuntime|FATAL" | tail -200; exit 1)
+            ./gradlew --no-daemon :app:installDebug :app:installDebugAndroidTest
+            adb shell appops set com.bikeos SYSTEM_ALERT_WINDOW allow
+            adb shell am instrument -w -e class com.bikeos.AppFlowTest com.bikeos.test/androidx.test.runner.AndroidJUnitRunner || true
             adb pull /sdcard/Android/data/com.bikeos/files/screenshots screenshots-api${{ matrix.api }} || true
 
       - name: Upload test report
@@ -102,3 +107,36 @@ jobs:
           name: screenshots-api${{ matrix.api }}
           path: screenshots-api${{ matrix.api }}/
           if-no-files-found: ignore
+
+  publish-screenshots:
+    # Commits the emulator screenshots to docs/screenshots on the pushed branch so they can be
+    # viewed on GitHub (and in the README). GITHUB_TOKEN pushes don't trigger another CI run.
+    needs: device-tests
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: screenshots-api29
+          path: shots
+        continue-on-error: true
+      - name: Commit screenshots
+        run: |
+          [ -d shots ] && ls shots/*.png >/dev/null 2>&1 || { echo "no screenshots"; exit 0; }
+          mkdir -p docs/screenshots
+          for f in shots/*.png; do
+            n=$(basename "$f" | sed 's/^api29_//')
+            if command -v convert >/dev/null; then convert "$f" -resize '1600x1600>' "docs/screenshots/$n"; else cp "$f" "docs/screenshots/$n"; fi
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git diff --cached --quiet && { echo "unchanged"; exit 0; }
+          git commit -m "Update emulator screenshots [skip ci]"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin "HEAD:${{ github.ref_name }}"
