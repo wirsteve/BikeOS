@@ -78,10 +78,9 @@ fun HomeScreen(nav: Navigator) {
     val ble by g.peripheral.status.collectAsStateWithLifecycle()
     val rides by g.rides.summaries.collectAsStateWithLifecycle()
     val summary = remember(rides) { Streaks.summarize(rides) }
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val now by g.clock.collectAsStateWithLifecycle()
     var needsInstall by remember { mutableStateOf<CatalogApp?>(null) }
-    var refreshTick by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) { while (true) { delay(10_000); now = System.currentTimeMillis(); refreshTick++ } }
+    val refreshTick = now / 10_000 // re-check installed apps every ~10 s
 
     fun open(app: CatalogApp) {
         g.ride.setCompanionApp(app.label.takeIf { app.section == AppSection.WATCH || app.section == AppSection.LISTEN })
@@ -274,8 +273,7 @@ private fun RideCard(nav: Navigator) {
 private fun SetupCard() {
     val ctx = LocalContext.current
     val activity = ctx as? Activity ?: return
-    var tick by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) { while (true) { delay(3_000); tick++ } }
+    val tick by ctx.graph.clock.collectAsStateWithLifecycle()
     val overlayOk = remember(tick) { Permissions.canDrawOverlays(ctx) }
     val btOk = remember(tick) { Permissions.hasBluetooth(ctx) }
     if (overlayOk && btOk) return

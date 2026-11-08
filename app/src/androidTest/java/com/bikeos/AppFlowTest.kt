@@ -46,6 +46,9 @@ class AppFlowTest {
     private val g get() = ctx.graph
 
     @Before fun setUp() {
+        // What the README's one-time adb setup does on a real bike.
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("appops set ${ctx.packageName} SYSTEM_ALERT_WINDOW allow").close()
         g.settings.update { it.copy(sensorSource = SensorSourceChoice.SIMULATOR, autoStartRide = false, dashboardEnabled = false) }
         if (g.ride.state.value.active) runOnMain { g.ride.finish(save = false) }
         runOnMain { g.ride.dismissSummary() }
@@ -72,7 +75,7 @@ class AppFlowTest {
         compose.waitUntil(10_000) { g.sensors.status.value.state == com.bikeos.sensor.SensorState.CONNECTED }
         shot("home")
 
-        compose.onNodeWithText("Workouts").performClick()
+        compose.onNodeWithText("Workouts").performScrollTo().performClick()
         waitForText("Power Zone")
         shot("workouts")
         compose.onNodeWithText("20 min Low Impact").performScrollTo().performClick()
@@ -105,7 +108,7 @@ class AppFlowTest {
     @Test fun simulatedRideIsRecordedSavedAndExported() {
         waitForText("Just Ride")
         compose.waitUntil(10_000) { g.sensors.status.value.state == com.bikeos.sensor.SensorState.CONNECTED }
-        compose.onNodeWithText("Just Ride").performClick()
+        compose.onNodeWithText("Just Ride").performScrollTo().performClick()
         waitForText("End ride")
         // Rides shorter than a minute are discarded by design, so ride for just over one.
         compose.waitUntil(80_000) { g.ride.state.value.stats.movingSec >= 62 }

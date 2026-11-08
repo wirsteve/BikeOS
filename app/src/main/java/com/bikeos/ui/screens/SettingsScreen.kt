@@ -101,8 +101,7 @@ fun SettingsScreen(nav: Navigator) {
                 }
                 Section("Overlay (stats on top of other apps)") {
                     val activity = ctx as? Activity
-                    var tick by remember { mutableStateOf(0) }
-                    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(2000); tick++ } }
+                    val tick by g.clock.collectAsStateWithLifecycle()
                     val allowed = remember(tick) { Permissions.canDrawOverlays(ctx) }
                     SettingRow("Permission", if (allowed) "Granted" else "Not granted. If the button does nothing on your bike, run: ${Permissions.ADB_OVERLAY}") {
                         if (!allowed && activity != null) Button(onClick = { Permissions.requestOverlay(activity) }) { Text("Allow") }

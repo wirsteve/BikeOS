@@ -28,6 +28,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -56,6 +57,11 @@ class AppGraph(val context: Context, val safeMode: Boolean) {
     val catalog = AppCatalog(context)
     val ride = RideController(scope, settings, sensors, heartRate.bpm, peripheral, rides)
     private var dashboard: DashboardServer? = null
+
+    /** Wall-clock tick every 2 s for screens that poll system state (clock, permissions, installed apps). */
+    val clock: kotlinx.coroutines.flow.StateFlow<Long> = kotlinx.coroutines.flow.flow {
+        while (true) { emit(System.currentTimeMillis()); kotlinx.coroutines.delay(2_000) }
+    }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), System.currentTimeMillis())
 
     fun start() {
         scope.launch { rides.refresh() }

@@ -60,8 +60,7 @@ fun AppleFitnessScreen(nav: Navigator) {
     val ble by g.peripheral.status.collectAsStateWithLifecycle()
     val settings by g.settings.state.collectAsStateWithLifecycle()
     val ride by g.ride.state.collectAsStateWithLifecycle()
-    var tick by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) { while (true) { delay(2_000); tick++ } }
+    val tick by g.clock.collectAsStateWithLifecycle()
     val receiver = remember(tick) { g.catalog.firstInstalled(AppCatalog.AIRPLAY_RECEIVERS) }
     val btPermission = remember(tick) { Permissions.hasBluetooth(ctx) }
     val name = remember(tick, ble.advertising) { g.peripheral.advertisedName ?: settings.bleName }
