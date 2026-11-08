@@ -78,7 +78,7 @@ class AppFlowTest {
         compose.onNodeWithText("Workouts").performScrollTo().performClick()
         waitForText("Power Zone")
         shot("workouts")
-        compose.onNodeWithText("20 min Low Impact").performScrollTo().performClick()
+        compose.onNodeWithText("20 min Low Impact").performClick() // 2nd card: visible without scrolling
         waitForText("Segments")
         shot("workout_detail")
         back(); back()
@@ -117,7 +117,7 @@ class AppFlowTest {
         assertTrue("power should be flowing: ${st.stats}", st.stats.avgPower > 20f)
         assertTrue("distance should accumulate", st.stats.distanceMiles > 0.05)
 
-        compose.onNodeWithText("End ride").performClick()
+        compose.onNodeWithText("End ride").performScrollTo().performClick()
         compose.onNodeWithText("End & save").performClick()
         waitForText("Nice ride!")
         shot("summary")

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
@@ -152,7 +153,8 @@ fun LiveRideScreen(nav: Navigator) {
                 }
             }
             // ---- Side stats ----
-            Column(Modifier.weight(0.32f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // Scrollable so the ride controls stay reachable on shorter screens.
+            Column(Modifier.weight(0.32f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (seg != null && p != null) {
                     Card(Modifier.fillMaxWidth(), color = BikeColors.SurfaceHigh) {
                         Column {
@@ -185,7 +187,6 @@ fun LiveRideScreen(nav: Navigator) {
                         }
                     }
                 }
-                Spacer(Modifier.weight(1f))
                 Button(
                     onClick = { pickApp = true }, modifier = Modifier.fillMaxWidth().height(56.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BikeColors.Cadence),

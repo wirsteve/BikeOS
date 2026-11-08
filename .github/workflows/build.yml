@@ -79,6 +79,8 @@ jobs:
           api-level: ${{ matrix.api }}
           arch: x86_64
           target: default
+          # Tablet-sized landscape screen, closer to the Peloton's 1080p display than a phone.
+          profile: pixel_c
           force-avd-creation: false
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
