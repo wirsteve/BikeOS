@@ -85,7 +85,7 @@ class AppFlowTest {
 
         compose.onNodeWithContentDescription("Settings").performClick()
         waitForText("Safety & Peloton")
-        compose.onNodeWithText("Bike check", substring = true, ignoreCase = true).assertExists()
+        compose.onNodeWithText("Run bike check again").assertExists()
         shot("settings")
         back()
 
