@@ -37,7 +37,7 @@ class AppCatalog(private val context: Context) {
     val entries: List<CatalogApp> = listOf(
         // ---- Train ----
         CatalogApp(
-            "apple-fitness", "Apple Fitness+", AppSection.FITNESS, listOf(AIRSCREEN), Color(0xFFB4FF39),
+            "apple-fitness", "Apple Fitness+", AppSection.FITNESS, AIRPLAY_RECEIVERS, Color(0xFFB4FF39),
             note = "Apple only ships Fitness+ for iPhone, iPad and Apple TV. Play it on this screen with AirPlay " +
                 "and let your Apple Watch record the bike's power and cadence.",
             special = CatalogApp.Special.APPLE_FITNESS,
@@ -46,6 +46,16 @@ class AppCatalog(private val context: Context) {
             note = "Pair \"BikeOS Bike\" as your Power Source, Cadence and Controllable trainer."),
         CatalogApp("peloton", "Peloton", AppSection.FITNESS, listOf(PelotonService.PELOTON_APP_PACKAGE), Color(0xFFDF1C2F),
             note = "The original Peloton app, if you keep a membership."),
+        CatalogApp("peloton-web", "Peloton App (web)", AppSection.FITNESS, emptyList(), Color(0xFFDF1C2F),
+            webUrl = "https://members.onepeloton.com", desktopSite = true,
+            note = "The Peloton App membership in the browser, with BikeOS tracking your real bike data."),
+        CatalogApp("trainerroad", "TrainerRoad", AppSection.FITNESS, listOf("com.trainerroad.android"), Color(0xFFE5232B),
+            webUrl = "https://www.trainerroad.com", note = "Pair \"BikeOS Bike\" as a smart trainer for ERG workouts."),
+        CatalogApp("wahoo-systm", "Wahoo SYSTM", AppSection.FITNESS, listOf("com.wahoofitness.systm", "com.wahoofitness.sufferfest"), Color(0xFF0091FF),
+            note = "Pair \"BikeOS Bike\" as a smart trainer."),
+        CatalogApp("lesmills", "Les Mills+", AppSection.FITNESS, listOf("com.lesmills.ondemand", "com.lesmills.plus"), Color(0xFFB0B0B0),
+            webUrl = "https://www.lesmills.com"),
+        CatalogApp("ntc", "Nike Training Club", AppSection.FITNESS, listOf("com.nike.ntc"), Color(0xFFFFFFFF)),
         CatalogApp("strava", "Strava", AppSection.FITNESS, listOf("com.strava"), Color(0xFFFC4C02), webUrl = "https://www.strava.com/dashboard"),
         CatalogApp("mywhoosh", "MyWhoosh", AppSection.FITNESS, listOf("com.mywhoosh.whooshgame"), Color(0xFF00B2FF)),
         CatalogApp("rouvy", "ROUVY", AppSection.FITNESS, listOf("com.virtualtraining.rouvy.android", "cz.virtualtraining.rouvy"), Color(0xFFFFCC00)),
@@ -84,7 +94,7 @@ class AppCatalog(private val context: Context) {
         CatalogApp("browser", "Browser", AppSection.TOOLS, emptyList(), Color(0xFF4FC3FF), webUrl = "https://www.google.com"),
         CatalogApp("store", "App Store (Aurora)", AppSection.TOOLS, listOf("com.aurora.store", "com.android.vending"), Color(0xFF34A853),
             webUrl = "https://auroraoss.com", note = "Install Android apps without Google Play using Aurora Store."),
-        CatalogApp("airscreen", "AirPlay Receiver", AppSection.TOOLS, listOf(AIRSCREEN), Color(0xFFBBBBBB),
+        CatalogApp("airscreen", "AirPlay Receiver", AppSection.TOOLS, AIRPLAY_RECEIVERS, Color(0xFFBBBBBB),
             note = "Mirror an iPhone/iPad (AirPlay) or Android phone (Cast) onto the bike screen."),
     )
 
@@ -93,6 +103,8 @@ class AppCatalog(private val context: Context) {
     fun isInstalled(pkg: String): Boolean = pm.getLaunchIntentForPackage(pkg) != null
 
     fun installedPackage(app: CatalogApp): String? = app.packages.firstOrNull(::isInstalled)
+
+    fun firstInstalled(packages: List<String>): String? = packages.firstOrNull(::isInstalled)
 
     /** Every launchable app on the tablet, for the "All apps" drawer. */
     fun installedApps(): List<InstalledApp> {
@@ -156,5 +168,7 @@ class AppCatalog(private val context: Context) {
     companion object {
         const val YOUTUBE = "com.google.android.youtube"
         const val AIRSCREEN = "com.ionitech.airscreen"
+        /** AirPlay / screen-mirroring receivers, preferred first. */
+        val AIRPLAY_RECEIVERS = listOf(AIRSCREEN, "com.softmedia.receiver.lite", "com.softmedia.receiver")
     }
 }

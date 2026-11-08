@@ -14,7 +14,9 @@ import android.os.Message
 import android.os.Messenger
 import android.os.Parcel
 import android.util.Log
+import com.bikeos.core.peloton.BlockedCallException
 import com.bikeos.core.peloton.PelotonBikeData
+import com.bikeos.core.peloton.PelotonCallPolicy
 import com.bikeos.core.peloton.PelotonService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +25,21 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "BikeOS.Sensor"
+
+/**
+ * Every Binder call into Peloton's service goes through here. Calls that are not on the
+ * [PelotonCallPolicy] allowlist are refused before anything is sent, so a bug or a bad setting can
+ * never trigger a calibration, firmware or factory function on the bike.
+ */
+internal fun guardedTransact(
+    binder: IBinder, iface: String, code: Int, data: Parcel, reply: Parcel?, userResistanceCode: Int? = null,
+): Boolean {
+    PelotonCallPolicy.check(iface, code, userResistanceCode) ?: run {
+        Log.e(TAG, "Blocked non-allowlisted Peloton call $iface#$code")
+        throw BlockedCallException(iface, code)
+    }
+    return binder.transact(code, data, reply, 0)
+}
 
 /**
  * Binds to one of Peloton's on-tablet services and keeps the binding alive, re-binding with
@@ -160,7 +177,7 @@ class PelotonV1Source(private val context: Context) : SensorSource {
             data.writeInterfaceToken(PelotonService.V1_INTERFACE)
             data.writeStrongBinder(callback)
             data.writeString("BikeOS")
-            b.transact(code, data, reply, 0)
+            guardedTransact(b, PelotonService.V1_INTERFACE, code, data, reply)
             reply.readException()
             if (code == PelotonService.V1_TX_REGISTER_CALLBACK) {
                 _status.value = SensorStatus(SensorState.NO_DATA, name, "Waiting for first reading… start pedaling")
@@ -243,7 +260,7 @@ class PelotonBikePlusSource(private val context: Context, private val pollMs: Lo
         val reply = Parcel.obtain()
         try {
             data.writeInterfaceToken(PelotonService.BIKE_PLUS_INTERFACE)
-            b.transact(PelotonService.BIKE_PLUS_TX_GET_BIKE_DATA, data, reply, 0)
+            guardedTransact(b, PelotonService.BIKE_PLUS_INTERFACE, PelotonService.BIKE_PLUS_TX_GET_BIKE_DATA, data, reply)
             reply.readException()
             reply.readInt() // non-null marker
             return PelotonBikeData.decode(AndroidParcelSource(reply))

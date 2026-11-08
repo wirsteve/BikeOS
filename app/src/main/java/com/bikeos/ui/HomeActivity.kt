@@ -18,6 +18,8 @@ import com.bikeos.Permissions
 import com.bikeos.graph
 import com.bikeos.ride.Foreground
 import com.bikeos.ui.screens.AllAppsScreen
+import com.bikeos.ui.screens.AppleFitnessScreen
+import com.bikeos.ui.screens.SafeModeScreen
 import com.bikeos.ui.screens.HistoryScreen
 import com.bikeos.ui.screens.HomeScreen
 import com.bikeos.ui.screens.LiveRideScreen
@@ -37,6 +39,7 @@ sealed class Screen {
     data class RideDetail(val id: String) : Screen()
     object Settings : Screen()
     object AllApps : Screen()
+    object AppleFitness : Screen()
 }
 
 /** Simple back-stack navigator; BikeOS has few enough screens not to need a nav library. */
@@ -72,7 +75,7 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         graph.ensureServiceRunning()
-        if (!Permissions.hasBluetooth(this)) Permissions.requestBluetooth(this)
+        if (!graph.safeMode && !Permissions.hasBluetooth(this)) Permissions.requestBluetooth(this)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -83,7 +86,7 @@ class HomeActivity : ComponentActivity() {
         setContent {
             BikeOSTheme {
                 Box(Modifier.fillMaxSize().background(BikeColors.Background)) {
-                    Router(nav)
+                    if (graph.safeMode) SafeModeScreen() else Router(nav)
                 }
             }
         }
@@ -134,5 +137,6 @@ private fun Router(nav: Navigator) {
         is Screen.RideDetail -> RideDetailScreen(nav, s.id)
         Screen.Settings -> SettingsScreen(nav)
         Screen.AllApps -> AllAppsScreen(nav)
+        Screen.AppleFitness -> AppleFitnessScreen(nav)
     }
 }

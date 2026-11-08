@@ -23,6 +23,11 @@ object GattIds {
     val CP_FEATURE = uuid16(0x2A65)
     val SENSOR_LOCATION = uuid16(0x2A5D)
 
+    // Cycling Speed & Cadence Service (CSC) - Garmin/Wahoo head units, watches, many apps
+    val CSC_SERVICE = uuid16(0x1816)
+    val CSC_MEASUREMENT = uuid16(0x2A5B)
+    val CSC_FEATURE = uuid16(0x2A5C)
+
     // Heart Rate Service - consumed from chest straps / arm bands
     val HR_SERVICE = uuid16(0x180D)
     val HR_MEASUREMENT = uuid16(0x2A37)
@@ -176,39 +181,60 @@ object FtmsCodec {
 }
 
 /**
+ * Synthesises crank revolution events from a cadence reading, as a real crank sensor would report
+ * them: a cumulative revolution count plus the time (1/1024 s) of the most recent whole revolution.
+ */
+class CrankCounter {
+    private var crankRevs = 0.0
+    private var lastUpdateMs: Long? = null
+    var cumulativeRevs = 0
+        private set
+    var lastEventTime1024 = 0
+        private set
+
+    fun update(cadenceRpm: Float, nowMs: Long) {
+        val prev = lastUpdateMs
+        lastUpdateMs = nowMs
+        if (prev == null || cadenceRpm <= 0f) return
+        val dtSec = ((nowMs - prev) / 1000.0).coerceIn(0.0, 2.0)
+        val before = crankRevs
+        crankRevs += cadenceRpm / 60.0 * dtSec
+        val whole = crankRevs.toInt()
+        if (whole > before.toInt()) {
+            // Time of the most recent whole revolution, interpolated inside this interval.
+            val secSinceWhole = (crankRevs - whole) / (cadenceRpm / 60.0)
+            val eventMs = nowMs - (secSinceWhole * 1000).toLong()
+            cumulativeRevs = whole
+            lastEventTime1024 = ((eventMs * 1024) / 1000 % 65536).toInt()
+        }
+    }
+}
+
+/**
  * Cycling Power Service encoder. Includes crank revolution data, which lets Apple Watch,
  * Garmin and others derive cadence from the same sensor.
  */
-class CyclingPowerEncoder {
-    private var crankRevs = 0.0
-    private var lastCrankEventTime1024 = 0
-    private var cumulativeRevs = 0
-    private var lastUpdateMs: Long? = null
-
+class CyclingPowerEncoder(private val crank: CrankCounter = CrankCounter()) {
     fun feature(): ByteArray = ByteWriter().u32(1L shl 3).bytes() // crank revolution data supported
 
     /** Sensor location: 0 = Other. */
     fun sensorLocation(): ByteArray = byteArrayOf(0)
 
-    fun measurement(powerW: Int, cadenceRpm: Float, nowMs: Long): ByteArray {
-        val prev = lastUpdateMs
-        lastUpdateMs = nowMs
-        if (prev != null && cadenceRpm > 0f) {
-            val dtSec = ((nowMs - prev) / 1000.0).coerceIn(0.0, 2.0)
-            val before = crankRevs
-            crankRevs += cadenceRpm / 60.0 * dtSec
-            val whole = crankRevs.toInt()
-            if (whole > before.toInt()) {
-                // Time of the most recent whole revolution, interpolated inside this interval.
-                val revsSinceWhole = crankRevs - whole
-                val secSinceWhole = revsSinceWhole / (cadenceRpm / 60.0)
-                val eventMs = nowMs - (secSinceWhole * 1000).toLong()
-                cumulativeRevs = whole
-                lastCrankEventTime1024 = ((eventMs * 1024) / 1000 % 65536).toInt()
-            }
-        }
+    /** Encode a measurement. Pass [advanceCrank] = false if a shared [CrankCounter] was already updated. */
+    fun measurement(powerW: Int, cadenceRpm: Float, nowMs: Long, advanceCrank: Boolean = true): ByteArray {
+        if (advanceCrank) crank.update(cadenceRpm, nowMs)
         val flags = 1 shl 5 // crank revolution data present
-        return ByteWriter().u16(flags).s16(powerW).u16(cumulativeRevs and 0xFFFF).u16(lastCrankEventTime1024).bytes()
+        return ByteWriter().u16(flags).s16(powerW).u16(crank.cumulativeRevs and 0xFFFF).u16(crank.lastEventTime1024).bytes()
+    }
+}
+
+/** Cycling Speed & Cadence encoder (crank data only: a stationary bike has no wheel). */
+class CscEncoder(private val crank: CrankCounter = CrankCounter()) {
+    fun feature(): ByteArray = ByteWriter().u16(1 shl 1).bytes() // crank revolution data supported
+
+    fun measurement(cadenceRpm: Float, nowMs: Long, advanceCrank: Boolean = true): ByteArray {
+        if (advanceCrank) crank.update(cadenceRpm, nowMs)
+        return ByteWriter().u8(1 shl 1).u16(crank.cumulativeRevs and 0xFFFF).u16(crank.lastEventTime1024).bytes()
     }
 }
 

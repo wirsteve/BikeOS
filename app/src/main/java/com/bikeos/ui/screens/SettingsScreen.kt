@@ -42,6 +42,7 @@ import com.bikeos.BuildConfig
 import com.bikeos.Permissions
 import com.bikeos.core.metrics.Calories
 import com.bikeos.core.metrics.ResistanceModel
+import com.bikeos.core.peloton.PelotonCallPolicy
 import com.bikeos.core.model.Units
 import com.bikeos.graph
 import com.bikeos.settings.SensorSourceChoice
@@ -122,6 +123,34 @@ fun SettingsScreen(nav: Navigator) {
             }
 
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Section("Safety & Peloton") {
+                    val health = remember { g.pelotonHealth() }
+                    Text(
+                        "BikeOS never modifies, disables or updates Peloton's software. It only reads sensor data through Peloton's own " +
+                            "service, using an allowlist of read-only calls. Uninstalling BikeOS returns the bike to exactly how it was.",
+                        color = BikeColors.TextDim,
+                    )
+                    if (health.isPeloton) {
+                        Text(
+                            (if (health.ok) "✓ " else "⚠ ") +
+                                "Peloton app: ${if (!health.pelotonAppInstalled) "missing" else if (health.pelotonAppEnabled) "installed" else "disabled"} · " +
+                                "Peloton sensor service: ${if (!health.sensorServiceInstalled) "missing" else if (health.sensorServiceEnabled) "running normally" else "disabled"}",
+                            color = if (health.ok) BikeColors.Good else BikeColors.Warn,
+                        )
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { g.openPeloton() }) { Text("Open Peloton app") }
+                        OutlinedButton(onClick = { (ctx as? Activity)?.let(Permissions::openHomeAppPicker) }) { Text("Choose home screen…") }
+                        g.settings.originalBluetoothName?.let { original ->
+                            OutlinedButton(onClick = {
+                                update { it.copy(bleRenameAdapter = false) }
+                                g.peripheral.restoreName(original)
+                                g.restartBluetoothBroadcast()
+                            }) { Text("Restore Bluetooth name \"$original\"") }
+                        }
+                    }
+                    Text("To remove BikeOS completely: ${Permissions.ADB_UNINSTALL}", color = BikeColors.TextDim, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                }
                 Section("Bike sensor") {
                     Text("Status: ${sensor.sourceName} · ${sensor.state.name.lowercase().replace('_', ' ')}" + (sensor.detail?.let { " · $it" } ?: ""), color = BikeColors.TextDim)
                     Text("Device: ${Build.BRAND} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}", color = BikeColors.TextDim)
@@ -145,14 +174,28 @@ fun SettingsScreen(nav: Navigator) {
                         update { it.copy(bleBroadcast = v) }
                         g.restartBluetoothBroadcast()
                     }
+                    ToggleRow(
+                        "Use a custom Bluetooth name",
+                        "Off (recommended): other devices see the tablet's existing name \"${g.peripheral.advertisedName ?: "?"}\". " +
+                            "On: BikeOS renames the tablet while broadcasting and restores the original name when it stops.",
+                        s.bleRenameAdapter,
+                    ) { v -> update { it.copy(bleRenameAdapter = v) }; g.restartBluetoothBroadcast() }
                     var name by remember(s.bleName) { mutableStateOf(s.bleName) }
-                    SettingRow("Bluetooth name") {
+                    if (s.bleRenameAdapter) SettingRow("Custom name") {
                         OutlinedTextField(name, { name = it.take(20) }, singleLine = true, modifier = Modifier.widthIn(max = 220.dp))
                         TextButton(onClick = { update { it.copy(bleName = name.ifBlank { "BikeOS Bike" }) }; g.restartBluetoothBroadcast() }) { Text("Save") }
                     }
                     ToggleRow("Follow resistance requests from apps", "ERG (target watts) and SIM (hills) from Zwift etc. become resistance prompts, or auto-resistance on a Bike+.", s.followTrainerApps) { v -> update { it.copy(followTrainerApps = v) } }
                     SettingRow("Hill feel: flat-road resistance") { Stepper("${s.terrainBase.roundToInt()}", { update { it.copy(terrainBase = (it.terrainBase - 1).coerceAtLeast(0f)) } }, { update { it.copy(terrainBase = (it.terrainBase + 1).coerceAtMost(80f)) } }) }
                     SettingRow("Hill feel: resistance per 1% grade") { Stepper("%.1f".format(s.terrainGain), { update { it.copy(terrainGain = (it.terrainGain - 0.5f).coerceAtLeast(0.5f)) } }, { update { it.copy(terrainGain = (it.terrainGain + 0.5f).coerceAtMost(10f)) } }) }
+                }
+                Section("Second screen (Wi-Fi dashboard)") {
+                    Text(
+                        "Show live bike stats in Safari/Chrome on any phone, iPad or laptop on your Wi-Fi — e.g. next to Apple Fitness+ " +
+                            "on an iPad or Apple TV. Read-only: nothing on the bike can be changed from it.",
+                        color = BikeColors.TextDim,
+                    )
+                    ToggleRow("Enable dashboard", g.dashboardUrl?.let { "Open $it" } ?: "Off", s.dashboardEnabled) { v -> update { it.copy(dashboardEnabled = v) } }
                 }
                 Section("Heart rate monitor") {
                     Text(
@@ -178,10 +221,15 @@ fun SettingsScreen(nav: Navigator) {
                         color = BikeColors.TextDim,
                     )
                     var code by remember(s.autoResistanceTxCode) { mutableStateOf(s.autoResistanceTxCode?.toString() ?: "") }
-                    SettingRow("Transaction code") {
-                        OutlinedTextField(code, { code = it.filter(Char::isDigit).take(4) }, singleLine = true, modifier = Modifier.width(120.dp))
-                        TextButton(onClick = { update { it.copy(autoResistanceTxCode = code.toIntOrNull()) } }) { Text("Save") }
+                    val codeValid = code.isEmpty() || PelotonCallPolicy.isValidResistanceCode(code.toIntOrNull())
+                    SettingRow("Transaction code", if (codeValid) null else "Not accepted: must be 1-64 and not a known read call.") {
+                        OutlinedTextField(code, { code = it.filter(Char::isDigit).take(3) }, singleLine = true, isError = !codeValid, modifier = Modifier.width(120.dp))
+                        TextButton(enabled = codeValid, onClick = { update { it.copy(autoResistanceTxCode = code.toIntOrNull()) } }) { Text("Save") }
                     }
+                    SettingRow("Maximum automatic resistance", "Auto-resistance never goes above this, ramps at most 10 points per second, and never increases while you're not pedaling.") {
+                        Stepper("${s.autoResistanceMax}", { update { it.copy(autoResistanceMax = (it.autoResistanceMax - 5).coerceAtLeast(10)) } }, { update { it.copy(autoResistanceMax = (it.autoResistanceMax + 5).coerceAtMost(100)) } })
+                    }
+                    if (g.ride.autoResistanceFaulted) Text("Auto-resistance stopped after repeated errors — check the transaction code. Manual prompts are active.", color = BikeColors.Bad)
                     ToggleRow("Enable auto-resistance", if (g.sensors.isBikePlus) "Bike+ detected" else "Requires a Peloton Bike+", s.autoResistance) { v -> update { it.copy(autoResistance = v) } }
                 }
                 Section("About") {

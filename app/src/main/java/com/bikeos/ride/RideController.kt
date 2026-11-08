@@ -267,9 +267,12 @@ class RideController(
         }
 
         val trainer = peripheral.target.value
-        val controller = resistanceController(cfg.autoResistance, cfg.autoResistanceTxCode)
-        val suggestion = suggestion(sample, progress, trainer, controller.isAutomatic)
-        if (controller.isAutomatic && suggestion != null && st.phase != RidePhase.PAUSED) controller.setTarget(suggestion.resistance)
+        val controller = resistanceController(cfg.autoResistance, cfg.autoResistanceTxCode, cfg.autoResistanceMax)
+        val automatic = controller.isAutomatic && !controller.faulted
+        val suggestion = suggestion(sample, progress, trainer, automatic)
+        if (automatic && suggestion != null && st.phase != RidePhase.PAUSED) {
+            controller.setTarget(suggestion.resistance, sample.resistancePct, sample.cadenceRpm, hub.isFresh)
+        }
 
         _state.value = st.copy(
             sample = sample,
@@ -302,17 +305,20 @@ class RideController(
         if (tickCount % (60 * TICKS_PER_SEC) == 0L) settings.saveResistanceModel(hub.resistanceModel)
     }
 
-    private fun resistanceController(enabled: Boolean, txCode: Int?): ResistanceController {
+    private fun resistanceController(enabled: Boolean, txCode: Int?, max: Int): ResistanceController {
         val source = hub.activeSource
-        val key = "$enabled/$txCode/${source?.javaClass?.simpleName}"
+        val key = "$enabled/$txCode/$max/${source?.javaClass?.simpleName}"
         if (key != resistanceControllerKey) {
             resistanceControllerKey = key
-            resistanceController = if (enabled && txCode != null && source is PelotonBikePlusSource) {
-                BikePlusAutoResistance({ source.currentBinder() }, txCode)
+            resistanceController = if (enabled && source is PelotonBikePlusSource) {
+                BikePlusAutoResistance.createIfSafe({ source.currentBinder() }, txCode, max)
             } else ManualResistance
         }
         return resistanceController
     }
+
+    /** Surfaces in Settings when auto-resistance gave up after failures. */
+    val autoResistanceFaulted: Boolean get() = resistanceController.faulted
 
     private fun suggestion(sample: BikeSample, progress: WorkoutProgress?, trainer: TrainerTarget, automatic: Boolean): Suggestion? {
         val cfg = settings.current

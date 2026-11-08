@@ -77,6 +77,9 @@ class SensorHub(
 
     val activeSource: SensorSource? get() = source
 
+    /** True if the bike sent a reading in the last 2 seconds. Auto-resistance only increases while fresh. */
+    val isFresh: Boolean get() = lastReadingMs != 0L && System.currentTimeMillis() - lastReadingMs < 2_000
+
     val isPeloton: Boolean get() = Build.BRAND.equals(PelotonService.BRAND, ignoreCase = true)
     val isBikePlus: Boolean get() = Build.MODEL == PelotonService.BIKE_PLUS_MODEL
 

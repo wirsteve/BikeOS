@@ -35,4 +35,10 @@ object Permissions {
 
     const val ADB_OVERLAY = "adb shell appops set com.bikeos SYSTEM_ALERT_WINDOW allow"
     const val ADB_HOME = "adb shell cmd package set-home-activity com.bikeos/.ui.HomeActivity"
+    const val ADB_UNINSTALL = "adb uninstall com.bikeos"
+
+    /** Opens Android's "Home app" picker where it exists, so the rider can choose Peloton again. */
+    fun openHomeAppPicker(activity: Activity): Boolean = runCatching {
+        activity.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+    }.isSuccess
 }

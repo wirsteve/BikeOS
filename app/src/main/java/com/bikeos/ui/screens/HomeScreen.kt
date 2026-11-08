@@ -79,7 +79,6 @@ fun HomeScreen(nav: Navigator) {
     val rides by g.rides.summaries.collectAsStateWithLifecycle()
     val summary = remember(rides) { Streaks.summarize(rides) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var info by remember { mutableStateOf<CatalogApp?>(null) }
     var needsInstall by remember { mutableStateOf<CatalogApp?>(null) }
     var refreshTick by remember { mutableLongStateOf(0L) }
     LaunchedEffect(Unit) { while (true) { delay(10_000); now = System.currentTimeMillis(); refreshTick++ } }
@@ -87,7 +86,7 @@ fun HomeScreen(nav: Navigator) {
     fun open(app: CatalogApp) {
         g.ride.setCompanionApp(app.label.takeIf { app.section == AppSection.WATCH || app.section == AppSection.LISTEN })
         when (val r = g.catalog.launch(app)) {
-            is AppCatalog.LaunchResult.ShowInfo -> info = r.app
+            is AppCatalog.LaunchResult.ShowInfo -> nav.go(Screen.AppleFitness)
             is AppCatalog.LaunchResult.NeedsInstall -> needsInstall = r.app
             else -> Unit
         }
@@ -199,7 +198,6 @@ fun HomeScreen(nav: Navigator) {
         }
     }
 
-    info?.let { app -> AppleFitnessDialog(app, onDismiss = { info = null }) }
     needsInstall?.let { app ->
         AlertDialog(
             onDismissRequest = { needsInstall = null },
@@ -343,41 +341,5 @@ fun RideSummaryDialog(r: RideRecord, onDismiss: () -> Unit, onDetails: () -> Uni
         },
         confirmButton = { Button(onClick = onDetails) { Text("Details & export") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-    )
-}
-
-@Composable
-private fun AppleFitnessDialog(app: CatalogApp, onDismiss: () -> Unit) {
-    val g = LocalContext.current.graph
-    val receiver = remember { g.catalog.installedPackage(app) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Apple Fitness+ on your bike") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(app.note ?: "", color = BikeColors.TextDim)
-                Text("1. Show the class on this screen", fontWeight = FontWeight.Bold)
-                Text(
-                    "Open an AirPlay receiver on the bike${if (receiver == null) " (install \"AirScreen\" from Aurora Store first)" else ""}. " +
-                        "On your iPhone or iPad, start the Fitness+ workout and choose AirPlay / Screen Mirroring → this bike. " +
-                        "How well protected video mirrors depends on the receiver app.",
-                )
-                Text("2. Let your Apple Watch record the bike", fontWeight = FontWeight.Bold)
-                Text(
-                    "BikeOS broadcasts as a Bluetooth power meter named \"${g.settings.current.bleName}\". On the Apple Watch (watchOS 10+), " +
-                        "open Settings → Bluetooth and pair it. Indoor Cycle workouts — including Fitness+ — then record your real " +
-                        "power and cadence from the bike, and Fitness+ shows them on screen.",
-                )
-                Text("3. Keep BikeOS stats on top", fontWeight = FontWeight.Bold)
-                Text("The BikeOS overlay stays visible over the mirrored class, and the ride is saved here too.")
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                if (receiver != null) g.catalog.launchPackage(receiver) else g.catalog.openStorePage(AppCatalog.AIRSCREEN)
-                onDismiss()
-            }) { Text(if (receiver != null) "Open AirPlay receiver" else "Get AirScreen") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
 }

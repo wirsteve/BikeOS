@@ -22,6 +22,8 @@ import android.bluetooth.le.AdvertiseSettings
 import android.content.Context
 import android.os.ParcelUuid
 import android.util.Log
+import com.bikeos.core.ble.CrankCounter
+import com.bikeos.core.ble.CscEncoder
 import com.bikeos.core.ble.CyclingPowerEncoder
 import com.bikeos.core.ble.FtmsCodec
 import com.bikeos.core.ble.FtmsCodec.ControlRequest
@@ -59,7 +61,10 @@ class BikePeripheral(private val context: Context) {
     private var server: BluetoothGattServer? = null
     private val subscriptions = ConcurrentHashMap<UUID, MutableSet<BluetoothDevice>>()
     private val connected = ConcurrentHashMap<String, BluetoothDevice>()
-    private val cps = CyclingPowerEncoder()
+    private val crank = CrankCounter()
+    private val cps = CyclingPowerEncoder(crank)
+    private val csc = CscEncoder(crank)
+    private var renamedFrom: String? = null
     private val pendingServices = ArrayDeque<BluetoothGattService>()
 
     private val _status = MutableStateFlow(PeripheralStatus())
@@ -71,8 +76,19 @@ class BikePeripheral(private val context: Context) {
     private lateinit var controlPoint: BluetoothGattCharacteristic
     private lateinit var machineStatus: BluetoothGattCharacteristic
     private lateinit var cpMeasurement: BluetoothGattCharacteristic
+    private lateinit var cscMeasurement: BluetoothGattCharacteristic
 
-    fun start(deviceName: String) {
+    /** The name other devices see in their pairing lists. */
+    val advertisedName: String? get() = runCatching { manager?.adapter?.name }.getOrNull()
+
+    /**
+     * @param renameTo if set, temporarily rename the tablet's Bluetooth adapter while broadcasting.
+     *   Off by default: the adapter name is a tablet-wide setting that Peloton's own Bluetooth
+     *   features also use. The original name is saved first and restored by [stop] (and by
+     *   "Restore Bluetooth name" in Settings if BikeOS was ever killed mid-broadcast).
+     * @param saveOriginalName persists the pre-rename name so it survives a crash.
+     */
+    fun start(renameTo: String?, saveOriginalName: (String) -> Unit = {}) {
         if (server != null) return
         val manager = manager ?: run {
             _status.value = PeripheralStatus(supported = false, error = "No Bluetooth on this device")
@@ -87,13 +103,22 @@ class BikePeripheral(private val context: Context) {
             _status.value = PeripheralStatus(supported = false, error = "This tablet cannot act as a Bluetooth sensor")
             return
         }
-        runCatching { adapter.name = deviceName }
+        if (!renameTo.isNullOrBlank()) {
+            runCatching {
+                val original = adapter.name
+                if (original != null && original != renameTo) {
+                    saveOriginalName(original)
+                    renamedFrom = original
+                    adapter.name = renameTo
+                }
+            }
+        }
         server = manager.openGattServer(context, callback) ?: run {
             _status.value = PeripheralStatus(error = "Could not open GATT server")
             return
         }
         pendingServices.clear()
-        pendingServices.addAll(listOf(buildFtms(), buildCps(), buildDis()))
+        pendingServices.addAll(listOf(buildFtms(), buildCps(), buildCsc(), buildDis()))
         // addService is asynchronous: add the next one from onServiceAdded.
         server?.addService(pendingServices.removeFirst())
     }
@@ -108,6 +133,7 @@ class BikePeripheral(private val context: Context) {
         val data = AdvertiseData.Builder()
             .addServiceUuid(ParcelUuid(GattIds.FTMS_SERVICE))
             .addServiceUuid(ParcelUuid(GattIds.CPS_SERVICE))
+            .addServiceUuid(ParcelUuid(GattIds.CSC_SERVICE))
             .addServiceData(ParcelUuid(GattIds.FTMS_SERVICE), FtmsCodec.advertisingServiceData())
             .build()
         val scanResponse = AdvertiseData.Builder().setIncludeDeviceName(true).build()
@@ -128,6 +154,8 @@ class BikePeripheral(private val context: Context) {
         runCatching { manager?.adapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback) }
         runCatching { server?.close() }
         server = null
+        renamedFrom?.let { original -> runCatching { manager?.adapter?.name = original } }
+        renamedFrom = null
         subscriptions.clear()
         connected.clear()
         _target.value = TrainerTarget.None
@@ -139,7 +167,9 @@ class BikePeripheral(private val context: Context) {
         val s = server ?: return
         if (connected.isEmpty()) return
         notify(s, indoorBikeData, FtmsCodec.indoorBikeData(frame))
-        notify(s, cpMeasurement, cps.measurement(frame.powerW, frame.cadenceRpm, nowMs))
+        crank.update(frame.cadenceRpm, nowMs)
+        notify(s, cpMeasurement, cps.measurement(frame.powerW, frame.cadenceRpm, nowMs, advanceCrank = false))
+        notify(s, cscMeasurement, csc.measurement(frame.cadenceRpm, nowMs, advanceCrank = false))
     }
 
     private fun notify(s: BluetoothGattServer, ch: BluetoothGattCharacteristic, value: ByteArray, indicate: Boolean = false) {
@@ -176,6 +206,20 @@ class BikePeripheral(private val context: Context) {
         svc.addCharacteristic(readOnly(GattIds.CP_FEATURE, cps.feature()))
         svc.addCharacteristic(readOnly(GattIds.SENSOR_LOCATION, cps.sensorLocation()))
         return svc
+    }
+
+    private fun buildCsc(): BluetoothGattService {
+        val svc = BluetoothGattService(GattIds.CSC_SERVICE, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+        cscMeasurement = BluetoothGattCharacteristic(GattIds.CSC_MEASUREMENT, PROPERTY_NOTIFY, 0).apply { addDescriptor(cccd()) }
+        svc.addCharacteristic(cscMeasurement)
+        svc.addCharacteristic(readOnly(GattIds.CSC_FEATURE, csc.feature()))
+        svc.addCharacteristic(readOnly(GattIds.SENSOR_LOCATION, cps.sensorLocation()))
+        return svc
+    }
+
+    /** Restores a Bluetooth name saved before a crash. */
+    fun restoreName(original: String) {
+        runCatching { manager?.adapter?.name = original }
     }
 
     private fun buildDis(): BluetoothGattService {

@@ -42,6 +42,10 @@ data class Settings(
     val sensorSource: SensorSourceChoice = SensorSourceChoice.AUTO,
     val autoResistance: Boolean = false,
     val autoResistanceTxCode: Int? = null,
+    val autoResistanceMax: Int = 75,
+    val bleRenameAdapter: Boolean = false,
+    val dashboardEnabled: Boolean = false,
+    val dashboardPort: Int = 8080,
     val terrainBase: Float = 30f,
     val terrainGain: Float = 3f,
     val followTrainerApps: Boolean = true,
@@ -52,6 +56,8 @@ data class Settings(
     val calorieConfig get() = CalorieConfig(useHrCalories, weightKg, ageYears, sex)
     val terrain get() = TerrainMapping(terrainBase, terrainGain)
 }
+
+const val CRASH_WINDOW_MS = 120_000L
 
 class SettingsStore(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("bikeos", Context.MODE_PRIVATE)
@@ -89,6 +95,10 @@ class SettingsStore(context: Context) {
                 .getOrDefault(d.sensorSource),
             autoResistance = getBoolean("autoResistance", d.autoResistance),
             autoResistanceTxCode = getInt("autoResistanceTxCode", -1).takeIf { it > 0 },
+            autoResistanceMax = getInt("autoResistanceMax", d.autoResistanceMax),
+            bleRenameAdapter = getBoolean("bleRenameAdapter", d.bleRenameAdapter),
+            dashboardEnabled = getBoolean("dashboardEnabled", d.dashboardEnabled),
+            dashboardPort = getInt("dashboardPort", d.dashboardPort),
             terrainBase = getFloat("terrainBase", d.terrainBase),
             terrainGain = getFloat("terrainGain", d.terrainGain),
             followTrainerApps = getBoolean("followTrainerApps", d.followTrainerApps),
@@ -120,6 +130,10 @@ class SettingsStore(context: Context) {
             .putString("sensorSource", s.sensorSource.name)
             .putBoolean("autoResistance", s.autoResistance)
             .putInt("autoResistanceTxCode", s.autoResistanceTxCode ?: -1)
+            .putInt("autoResistanceMax", s.autoResistanceMax)
+            .putBoolean("bleRenameAdapter", s.bleRenameAdapter)
+            .putBoolean("dashboardEnabled", s.dashboardEnabled)
+            .putInt("dashboardPort", s.dashboardPort)
             .putFloat("terrainBase", s.terrainBase)
             .putFloat("terrainGain", s.terrainGain)
             .putBoolean("followTrainerApps", s.followTrainerApps)
@@ -138,6 +152,29 @@ class SettingsStore(context: Context) {
 
     fun saveResistanceModel(m: ResistanceModel) {
         prefs.edit().putString("resistanceModel", Json.encodeToString(ResistanceModel.Snapshot.serializer(), m.snapshot())).apply()
+    }
+
+    /** The tablet's own Bluetooth name before BikeOS ever changed it, so it can always be restored. */
+    var originalBluetoothName: String?
+        get() = prefs.getString("originalBluetoothName", null)
+        set(v) { prefs.edit().putString("originalBluetoothName", v).commit() }
+
+    /** Crash timestamps for the safe-mode guard. Uses commit() because the process is about to die. */
+    fun recordCrash(now: Long) {
+        val recent = crashTimes().filter { now - it < CRASH_WINDOW_MS } + now
+        prefs.edit().putString("crashTimes", recent.joinToString(",")).commit()
+    }
+
+    fun crashTimes(): List<Long> = prefs.getString("crashTimes", "")!!.split(',').mapNotNull { it.toLongOrNull() }
+
+    fun clearCrashes() { prefs.edit().remove("crashTimes").apply() }
+
+    /** Restore every setting to its default (keeps ride history). */
+    fun resetAll() {
+        val keepName = originalBluetoothName
+        prefs.edit().clear().commit()
+        originalBluetoothName = keepName
+        _state.value = Settings()
     }
 
     fun resetResistanceModel() {

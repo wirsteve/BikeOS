@@ -14,10 +14,27 @@
   - **Zwift, Rouvy, MyWhoosh, Kinomap, TrainerRoad:** pair "BikeOS Bike". ERG mode (target watts) and SIM mode (hills) become resistance prompts, or automatic resistance on a Bike+.
   - **Apple Fitness+ / Apple Watch:** pair "BikeOS Bike" as a power meter on the watch (watchOS 10+). Indoor Cycle workouts then record real power and cadence. Fitness+ itself only exists on Apple devices, so you AirPlay or mirror the class onto the bike screen with an AirPlay receiver app. The Fitness+ tile walks you through it.
 - **Heart-rate straps:** connect any standard Bluetooth HR monitor.
+- **Second screen:** an optional Wi-Fi dashboard so any phone or iPad can show your live bike stats.
+- **Built to be safe:** BikeOS only makes allowlisted read-only calls to Peloton's service, caps and rate-limits any motor control, has a safe mode for crash loops, and never modifies Peloton's software (see [Safety](#safety-bikeos-wont-break-your-peloton)).
 
 > BikeOS is independent software. It is not affiliated with or endorsed by Peloton. It relies on undocumented interfaces that a Peloton software update can change at any time.
 
 ---
+
+## Safety: BikeOS won't break your Peloton
+
+BikeOS is built so it can't damage the bike or leave it unusable:
+
+| Risk | What BikeOS does about it |
+|---|---|
+| Changing Peloton's software | Never. It doesn't modify, disable, update or uninstall any Peloton package. The Peloton app stays installed and is one tap away (**Settings → Safety & Peloton → Open Peloton app**). |
+| Calling the wrong function on Peloton's sensor service (e.g. calibration, firmware) | Every Binder call goes through an **allowlist** (`PelotonCallPolicy`): register/unregister a listener, and read bike data. Anything else is refused before it's sent. Unit-tested against every other transaction number. |
+| Bike+ resistance motor | Off by default. When enabled it is limited (`ResistanceLimiter`, unit-tested): a user ceiling (default 75), at most 10 points per step and one step per second, **never increases while you aren't pedaling or if sensor data is stale**, only runs on a real Bike+ (`PLTN-TTR01`), and switches itself off after 3 errors. |
+| BikeOS crashing as the home screen | A crash guard hands the screen back to the Peloton app. After 3 crashes in 2 minutes BikeOS starts in **safe mode**: it touches no sensors, Bluetooth or motor, and offers "Open Peloton", "Try again" and "Reset settings". |
+| Tablet-wide Bluetooth name | Not changed by default. The custom name is opt-in, the original name is saved first, and it's restored automatically (or via **Restore Bluetooth name**). |
+| Getting stuck | `adb uninstall com.bikeos` returns the bike to stock. Peloton becomes the home screen again automatically, and your Peloton account and data are untouched. |
+
+What BikeOS **can't** promise: a future Peloton OTA update may change the sensor service so BikeOS stops seeing data. That doesn't harm the bike. Settings → Bike sensor shows the status. Peloton also restricts sideloading on newer OS versions to active members, and installing third-party apps is your own choice and responsibility.
 
 ## What "a new OS" means here (and what it doesn't)
 
@@ -100,9 +117,19 @@ Use **Aurora Store** (an anonymous Google Play client) or sideload APKs with `ad
 Zwift and similar apps can run on the bike itself or on another device, such as a phone, Apple TV or laptop.
 
 ### Apple Fitness+ and Apple Watch
-1. On the Apple Watch: **Settings → Bluetooth** and pair **BikeOS Bike**. It appears as a cycling power sensor and also provides cadence.
-2. Start an Indoor Cycle workout on the watch, either from Fitness+ on your iPhone/iPad or on its own. Your watch records real power and cadence.
-3. To show the class on the bike screen, install an AirPlay receiver (the tile links to **AirScreen**) and AirPlay or mirror from your iPhone/iPad. How well protected video mirrors depends on the receiver app.
+Apple only makes Fitness+ for iPhone, iPad and Apple TV, so there's no Android app to install. Tap the **Apple Fitness+** tile to open a setup screen with a live checklist:
+
+1. **Bike broadcasting.** BikeOS appears as a Bluetooth **power meter + cadence sensor (Cycling Power + Cycling Speed & Cadence)** and a **smart trainer (FTMS)**.
+2. **Pair your Apple Watch once** (watchOS 10+): Settings → Bluetooth → tap the bike under Health Devices. Indoor Cycle workouts, including Fitness+ cycling classes, then record **the bike's real power and cadence**, and Fitness+ shows them on screen. The checklist turns green when the watch connects.
+3. **Big screen (optional).** Install an AirPlay receiver (AirScreen) and use Screen Mirroring from your iPhone/iPad. How well protected video mirrors depends on the receiver app. Or keep the class on an iPad/Apple TV.
+4. **Stats on your iPhone/iPad (optional).** Turn on the Wi-Fi dashboard and open the address it shows in Safari.
+5. **Start ride & open AirPlay.** BikeOS starts recording, switches the overlay to compact and opens the receiver.
+
+### Second screen: Wi-Fi dashboard
+Settings → **Second screen** serves a live, read-only dashboard at `http://<bike-ip>:8080` on your home network. It shows power and zone, cadence, resistance, HR, targets and resistance prompts, and updates every second. It works in any browser (iPhone, iPad, laptop) and is handy when the class is playing on a TV. JSON is at `/api/live`, with a live stream at `/api/stream` for tinkerers (e.g. Home Assistant). There are no endpoints that change anything.
+
+### More subscriptions
+Tiles include the Peloton App (web), Zwift, TrainerRoad, Wahoo SYSTM, ROUVY, MyWhoosh, Kinomap, Les Mills+, Nike Training Club, Strava and YouTube workouts, plus all the streaming and music apps. Any trainer app on any device (iPhone, iPad, Apple TV, Mac, Android) can pair with the bike over Bluetooth.
 
 ### Bike+ auto-resistance (experimental, off by default)
 The Bike+ resistance motor is set through `IBikeInterface`, but the transaction number isn't public and differs between firmware builds. Rather than guess, and risk sending the wrong command to a motor controller, BikeOS asks you for it:
