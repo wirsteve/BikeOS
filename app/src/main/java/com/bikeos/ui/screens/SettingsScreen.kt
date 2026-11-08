@@ -52,6 +52,7 @@ import com.bikeos.ui.components.Card
 import com.bikeos.ui.components.SectionTitle
 import com.bikeos.ui.theme.BikeColors
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -157,6 +158,7 @@ fun SettingsScreen(nav: Navigator) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         SensorSourceChoice.entries.forEach { c -> FilterChip(s.sensorSource == c, { update { it.copy(sensorSource = c) } }, { Text(c.label) }) }
                     }
+                    BikeCheckBlock()
                     SettingRow("Learned resistance curve", "${g.sensors.resistanceModel.samplesLearned} samples from your bike. Used for ERG mode and power-zone resistance hints.") {
                         OutlinedButton(onClick = {
                             g.settings.resetResistanceModel()
@@ -221,7 +223,7 @@ fun SettingsScreen(nav: Navigator) {
                         color = BikeColors.TextDim,
                     )
                     var code by remember(s.autoResistanceTxCode) { mutableStateOf(s.autoResistanceTxCode?.toString() ?: "") }
-                    val codeValid = code.isEmpty() || PelotonCallPolicy.isValidResistanceCode(code.toIntOrNull())
+                    val codeValid = code.isEmpty() || PelotonCallPolicy.isValidResistanceCode(code.toIntOrNull(), g.sensors.protocol)
                     SettingRow("Transaction code", if (codeValid) null else "Not accepted: must be 1-64 and not a known read call.") {
                         OutlinedTextField(code, { code = it.filter(Char::isDigit).take(3) }, singleLine = true, isError = !codeValid, modifier = Modifier.width(120.dp))
                         TextButton(enabled = codeValid, onClick = { update { it.copy(autoResistanceTxCode = code.toIntOrNull()) } }) { Text("Save") }
@@ -260,6 +262,48 @@ fun SettingsScreen(nav: Navigator) {
             },
             confirmButton = { TextButton(onClick = { scanning = false; g.heartRate.stopScan() }) { Text("Close") } },
         )
+    }
+}
+
+/** Shows what the read-only inspection of Peloton's sensor service found on this bike. */
+@Composable
+private fun BikeCheckBlock() {
+    val g = LocalContext.current.graph
+    val check by g.sensors.check.collectAsStateWithLifecycle()
+    val settings by g.settings.state.collectAsStateWithLifecycle()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Bike check (reads Peloton's sensor-service code; changes nothing)", color = BikeColors.Text, style = MaterialTheme.typography.titleMedium)
+        when (val r = check) {
+            null -> Text(if (g.sensors.isPeloton) "Not run yet." else "Not a Peloton — nothing to check.", color = BikeColors.TextDim)
+            is com.bikeos.sensor.BikeCheck.Result.NotInstalled -> Text(r.why, color = BikeColors.Warn)
+            is com.bikeos.sensor.BikeCheck.Result.Unreadable -> Text(r.why, color = BikeColors.Warn)
+            is com.bikeos.sensor.BikeCheck.Result.Ok -> {
+                val rep = r.report
+                fun mark(b: Boolean) = if (b) "✓" else "✗"
+                Text(
+                    "Sensor service ${r.version} · Bike interface ${mark(rep.v1InterfaceFound)} · callback ${mark(rep.v1CallbackFound)} · " +
+                        "Bike+ interface ${mark(rep.bikePlusInterfaceFound)} · BikeData ${mark(rep.bikeDataFound)}",
+                    color = if (rep.anyInterfaceFound) BikeColors.Good else BikeColors.Bad,
+                )
+                Text(
+                    "Using: register #${rep.protocol.v1RegisterCallback}, unregister #${rep.protocol.v1UnregisterCallback}, " +
+                        "Bike+ read #${rep.protocol.bikePlusGetBikeData} (${rep.protocol.source})",
+                    color = BikeColors.TextDim, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
+                )
+                rep.notes.forEach { Text("• $it", color = BikeColors.Warn, fontSize = 13.sp) }
+                rep.protocol.bikePlusSetResistance?.let { code ->
+                    val name = rep.resistanceCandidates.firstOrNull { it.second == code }?.first ?: "set resistance"
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Found Bike+ resistance call: $name (#$code)", color = BikeColors.Accent, modifier = Modifier.weight(1f))
+                        if (settings.autoResistanceTxCode != code) {
+                            OutlinedButton(onClick = { g.settings.update { it.copy(autoResistanceTxCode = code) } }) { Text("Use it") }
+                        }
+                    }
+                }
+            }
+        }
+        TextButton(onClick = { scope.launch { g.sensors.runBikeCheck(); g.sensors.start(settings.sensorSource) } }) { Text("Run bike check again") }
     }
 }
 

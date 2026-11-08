@@ -6,10 +6,13 @@ import android.util.Log
 import com.bikeos.core.metrics.ResistanceModel
 import com.bikeos.core.metrics.SpikeFilter
 import com.bikeos.core.model.BikeSample
+import com.bikeos.core.peloton.PelotonProtocol
 import com.bikeos.core.peloton.PelotonService
 import com.bikeos.settings.SensorSourceChoice
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,41 +86,87 @@ class SensorHub(
     val isPeloton: Boolean get() = Build.BRAND.equals(PelotonService.BRAND, ignoreCase = true)
     val isBikePlus: Boolean get() = Build.MODEL == PelotonService.BIKE_PLUS_MODEL
 
+    /** Transaction numbers in use; updated from Peloton's own code by [runBikeCheck]. */
+    @Volatile var protocol: PelotonProtocol = PelotonProtocol()
+        private set
+
+    private val _check = MutableStateFlow<BikeCheck.Result?>(null)
+    val check: StateFlow<BikeCheck.Result?> = _check.asStateFlow()
+
+    /** Inspect Peloton's sensor service on this bike (read-only) and adopt the protocol it uses. */
+    suspend fun runBikeCheck(): BikeCheck.Result? {
+        if (!isPeloton && !hasPelotonService()) return null
+        val r = withContext(Dispatchers.IO) { runCatching { BikeCheck.run(context) }.getOrElse { BikeCheck.Result.Unreadable(it.message ?: "error") } }
+        _check.value = r
+        if (r is BikeCheck.Result.Ok) protocol = r.report.protocol
+        return r
+    }
+
+    private fun hasPelotonService() = runCatching { context.packageManager.getApplicationInfo(PelotonService.AFFERNET_PACKAGE, 0) }.isSuccess
+
+    private fun create(choice: SensorSourceChoice): SensorSource? = when (choice) {
+        SensorSourceChoice.PELOTON_BIKE -> PelotonV1Source(context) { protocol }
+        SensorSourceChoice.PELOTON_BIKE_PLUS -> PelotonBikePlusSource(context, { protocol })
+        SensorSourceChoice.PELOTON_LEGACY -> PelotonLegacySource(context)
+        SensorSourceChoice.SIMULATOR -> SimulatedSource(resistanceModel)
+        SensorSourceChoice.AUTO, SensorSourceChoice.NONE -> null
+    }
+
+    /**
+     * Order to try sources in for AUTO. Uses the bike check when available (which interfaces exist
+     * in Peloton's code on this firmware), otherwise the model name.
+     */
+    fun autoOrder(): List<SensorSourceChoice> {
+        val report = (check.value as? BikeCheck.Result.Ok)?.report
+        val bikePlusFirst = when {
+            report != null && report.bikePlusInterfaceFound && !report.v1InterfaceFound -> true
+            report != null && report.v1InterfaceFound && !report.bikePlusInterfaceFound -> false
+            else -> isBikePlus
+        }
+        return if (bikePlusFirst) listOf(SensorSourceChoice.PELOTON_BIKE_PLUS, SensorSourceChoice.PELOTON_BIKE, SensorSourceChoice.PELOTON_LEGACY)
+        else listOf(SensorSourceChoice.PELOTON_BIKE, SensorSourceChoice.PELOTON_BIKE_PLUS, SensorSourceChoice.PELOTON_LEGACY)
+    }
+
     fun start(choice: SensorSourceChoice) {
         stop()
-        val src = when (choice) {
-            SensorSourceChoice.AUTO -> when {
-                isPeloton && isBikePlus -> PelotonBikePlusSource(context)
-                isPeloton -> PelotonV1Source(context)
-                else -> null
+        if (choice == SensorSourceChoice.AUTO) {
+            if (!isPeloton && !hasPelotonService()) {
+                _status.value = SensorStatus(SensorState.UNAVAILABLE, "No sensor", "Not running on a Peloton. Choose a sensor in Settings.")
+                return
             }
-            SensorSourceChoice.PELOTON_BIKE -> PelotonV1Source(context)
-            SensorSourceChoice.PELOTON_BIKE_PLUS -> PelotonBikePlusSource(context)
-            SensorSourceChoice.PELOTON_LEGACY -> PelotonLegacySource(context)
-            SensorSourceChoice.SIMULATOR -> SimulatedSource(resistanceModel)
-            SensorSourceChoice.NONE -> null
-        }
-        if (src == null) {
-            _status.value = SensorStatus(
-                SensorState.UNAVAILABLE, "No sensor",
-                if (choice == SensorSourceChoice.AUTO) "Not running on a Peloton. Choose a sensor in Settings." else null,
-            )
+            startChain(autoOrder())
             return
         }
+        val src = create(choice)
+        if (src == null) {
+            _status.value = SensorStatus(SensorState.UNAVAILABLE, "No sensor", null)
+            return
+        }
+        attach(src)
+    }
+
+    /** Try each source in turn until one connects; fall through on "service not found" or no data. */
+    private fun startChain(order: List<SensorSourceChoice>) {
+        val first = order.firstOrNull() ?: return
+        val src = create(first) ?: return
+        attach(src)
+        if (order.size <= 1) return
+        scope.launch {
+            delay(4_000)
+            val st = src.status.value.state
+            // Only move on when this interface clearly doesn't exist / refused us; never while it's working.
+            if (source === src && st == SensorState.UNAVAILABLE) {
+                Log.i("BikeOS.Sensor", "${src.name} unavailable (${src.status.value.detail}); trying ${order[1]}")
+                stop()
+                startChain(order.drop(1))
+            }
+        }
+    }
+
+    private fun attach(src: SensorSource) {
         source = src
         statusJob = scope.launch { src.status.collectLatest { _status.value = it } }
         src.start(::onReading)
-
-        // On AUTO for a Peloton Bike, fall back to the legacy service if the V1 one is absent.
-        if (choice == SensorSourceChoice.AUTO && src is PelotonV1Source) {
-            scope.launch {
-                delay(4_000)
-                if (src.status.value.state == SensorState.UNAVAILABLE && source === src) {
-                    Log.i("BikeOS.Sensor", "V1 interface unavailable, trying legacy service")
-                    start(SensorSourceChoice.PELOTON_LEGACY)
-                }
-            }
-        }
 
         // Zero metrics if the sensor goes silent so a stalled service does not freeze the display.
         watchdogJob = scope.launch {

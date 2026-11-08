@@ -16,24 +16,26 @@ object PelotonCallPolicy {
 
     data class Call(val iface: String, val code: Int, val kind: Kind)
 
-    private val fixed = listOf(
-        Call(PelotonService.V1_INTERFACE, PelotonService.V1_TX_REGISTER_CALLBACK, Kind.REGISTER_LISTENER),
-        Call(PelotonService.V1_INTERFACE, PelotonService.V1_TX_UNREGISTER_CALLBACK, Kind.REGISTER_LISTENER),
-        Call(PelotonService.BIKE_PLUS_INTERFACE, PelotonService.BIKE_PLUS_TX_GET_BIKE_DATA, Kind.READ_ONLY),
-    )
-
-    /** Codes that are known to be something other than "set resistance", and so never accepted as one. */
-    private val reservedBikePlusCodes = setOf(PelotonService.BIKE_PLUS_TX_GET_BIKE_DATA)
+    /**
+     * Codes that are never accepted as "set resistance": the read call and anything that is not a
+     * plausible AIDL transaction number.
+     */
+    fun isValidResistanceCode(code: Int?, protocol: PelotonProtocol = PelotonProtocol()): Boolean =
+        code != null && code in 1..64 && code != protocol.bikePlusGetBikeData
 
     /**
-     * A user-supplied Bike+ resistance code is accepted only on the Bike+ interface, must be a plausible
-     * AIDL transaction number (1..64), and must not collide with a known read call.
+     * @param protocol the transaction numbers in use (defaults, or as read from Peloton's own code by
+     *   the bike check). Only the specific named calls in it are allowed, never anything else.
+     * @param userResistanceCode the Bike+ set-resistance code, if the rider enabled auto-resistance.
      */
-    fun isValidResistanceCode(code: Int?): Boolean = code != null && code in 1..64 && code !in reservedBikePlusCodes
-
-    fun check(iface: String, code: Int, userResistanceCode: Int? = null): Call? {
-        fixed.firstOrNull { it.iface == iface && it.code == code }?.let { return it }
-        if (iface == PelotonService.BIKE_PLUS_INTERFACE && isValidResistanceCode(userResistanceCode) && code == userResistanceCode) {
+    fun check(iface: String, code: Int, protocol: PelotonProtocol = PelotonProtocol(), userResistanceCode: Int? = null): Call? {
+        val allowed = listOf(
+            Call(PelotonService.V1_INTERFACE, protocol.v1RegisterCallback, Kind.REGISTER_LISTENER),
+            Call(PelotonService.V1_INTERFACE, protocol.v1UnregisterCallback, Kind.REGISTER_LISTENER),
+            Call(PelotonService.BIKE_PLUS_INTERFACE, protocol.bikePlusGetBikeData, Kind.READ_ONLY),
+        )
+        allowed.firstOrNull { it.iface == iface && it.code == code }?.let { return it }
+        if (iface == PelotonService.BIKE_PLUS_INTERFACE && code == userResistanceCode && isValidResistanceCode(userResistanceCode, protocol)) {
             return Call(iface, code, Kind.MOTOR_WRITE)
         }
         return null

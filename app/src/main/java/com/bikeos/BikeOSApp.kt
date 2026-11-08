@@ -67,6 +67,9 @@ class AppGraph(val context: Context, val safeMode: Boolean) {
             return
         }
         scope.launch {
+            // Inspect Peloton's code first (read-only, takes a second), so the right interface and
+            // transaction numbers for this firmware are used from the very first call.
+            sensors.runBikeCheck()
             settings.state.distinctUntilChangedBy { it.sensorSource }.collect { sensors.start(it.sensorSource) }
         }
         scope.launch {

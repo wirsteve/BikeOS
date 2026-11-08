@@ -311,7 +311,7 @@ class RideController(
         if (key != resistanceControllerKey) {
             resistanceControllerKey = key
             resistanceController = if (enabled && source is PelotonBikePlusSource) {
-                BikePlusAutoResistance.createIfSafe({ source.currentBinder() }, txCode, max)
+                BikePlusAutoResistance.createIfSafe({ source.currentBinder() }, txCode, max, { hub.protocol })
             } else ManualResistance
         }
         return resistanceController

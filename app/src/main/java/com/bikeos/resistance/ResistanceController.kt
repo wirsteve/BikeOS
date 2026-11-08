@@ -5,6 +5,7 @@ import android.os.IBinder
 import android.os.Parcel
 import android.util.Log
 import com.bikeos.core.peloton.PelotonCallPolicy
+import com.bikeos.core.peloton.PelotonProtocol
 import com.bikeos.core.peloton.PelotonService
 import com.bikeos.core.peloton.ResistanceLimiter
 import com.bikeos.sensor.guardedTransact
@@ -42,6 +43,7 @@ class BikePlusAutoResistance private constructor(
     private val binderProvider: () -> IBinder?,
     private val transactionCode: Int,
     maxResistance: Int,
+    private val protocol: () -> PelotonProtocol,
 ) : ResistanceController {
     override val isAutomatic = true
     private val limiter = ResistanceLimiter(maxResistance = maxResistance)
@@ -55,7 +57,7 @@ class BikePlusAutoResistance private constructor(
         try {
             data.writeInterfaceToken(PelotonService.BIKE_PLUS_INTERFACE)
             data.writeInt(cmd)
-            guardedTransact(b, PelotonService.BIKE_PLUS_INTERFACE, transactionCode, data, reply, userResistanceCode = transactionCode)
+            guardedTransact(b, PelotonService.BIKE_PLUS_INTERFACE, transactionCode, data, reply, protocol(), userResistanceCode = transactionCode)
             reply.readException()
             limiter.reportSuccess()
         } catch (e: Exception) {
@@ -69,10 +71,12 @@ class BikePlusAutoResistance private constructor(
 
     companion object {
         /** Returns a controller only when every precondition holds; otherwise manual prompts are used. */
-        fun createIfSafe(binderProvider: () -> IBinder?, transactionCode: Int?, maxResistance: Int): ResistanceController {
+        fun createIfSafe(
+            binderProvider: () -> IBinder?, transactionCode: Int?, maxResistance: Int, protocol: () -> PelotonProtocol,
+        ): ResistanceController {
             if (Build.MODEL != PelotonService.BIKE_PLUS_MODEL) return ManualResistance
-            if (!PelotonCallPolicy.isValidResistanceCode(transactionCode)) return ManualResistance
-            return BikePlusAutoResistance(binderProvider, transactionCode!!, maxResistance.coerceIn(10, 100))
+            if (!PelotonCallPolicy.isValidResistanceCode(transactionCode, protocol())) return ManualResistance
+            return BikePlusAutoResistance(binderProvider, transactionCode!!, maxResistance.coerceIn(10, 100), protocol)
         }
     }
 }

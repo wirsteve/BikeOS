@@ -17,6 +17,7 @@ import android.util.Log
 import com.bikeos.core.peloton.BlockedCallException
 import com.bikeos.core.peloton.PelotonBikeData
 import com.bikeos.core.peloton.PelotonCallPolicy
+import com.bikeos.core.peloton.PelotonProtocol
 import com.bikeos.core.peloton.PelotonService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,9 +33,10 @@ private const val TAG = "BikeOS.Sensor"
  * never trigger a calibration, firmware or factory function on the bike.
  */
 internal fun guardedTransact(
-    binder: IBinder, iface: String, code: Int, data: Parcel, reply: Parcel?, userResistanceCode: Int? = null,
+    binder: IBinder, iface: String, code: Int, data: Parcel, reply: Parcel?,
+    protocol: PelotonProtocol, userResistanceCode: Int? = null,
 ): Boolean {
-    PelotonCallPolicy.check(iface, code, userResistanceCode) ?: run {
+    PelotonCallPolicy.check(iface, code, protocol, userResistanceCode) ?: run {
         Log.e(TAG, "Blocked non-allowlisted Peloton call $iface#$code")
         throw BlockedCallException(iface, code)
     }
@@ -107,7 +109,7 @@ internal class ServiceBinder(
  * Peloton Bike on current OS builds: `IV1Interface` exposes registerCallback(IV1Callback, String)
  * and pushes a BikeData parcel to the callback on every sensor update.
  */
-class PelotonV1Source(private val context: Context) : SensorSource {
+class PelotonV1Source(private val context: Context, private val protocol: () -> PelotonProtocol = { PelotonProtocol() }) : SensorSource {
     override val name = "Peloton Bike"
     private val _status = MutableStateFlow(SensorStatus(SensorState.STOPPED, name))
     override val status: StateFlow<SensorStatus> = _status.asStateFlow()
@@ -168,7 +170,7 @@ class PelotonV1Source(private val context: Context) : SensorSource {
         }
     }
 
-    private fun register(b: IBinder) = transactCallback(b, PelotonService.V1_TX_REGISTER_CALLBACK)
+    private fun register(b: IBinder) = transactCallback(b, protocol().v1RegisterCallback)
 
     private fun transactCallback(b: IBinder, code: Int) {
         val data = Parcel.obtain()
@@ -177,9 +179,9 @@ class PelotonV1Source(private val context: Context) : SensorSource {
             data.writeInterfaceToken(PelotonService.V1_INTERFACE)
             data.writeStrongBinder(callback)
             data.writeString("BikeOS")
-            guardedTransact(b, PelotonService.V1_INTERFACE, code, data, reply)
+            guardedTransact(b, PelotonService.V1_INTERFACE, code, data, reply, protocol())
             reply.readException()
-            if (code == PelotonService.V1_TX_REGISTER_CALLBACK) {
+            if (code == protocol().v1RegisterCallback) {
                 _status.value = SensorStatus(SensorState.NO_DATA, name, "Waiting for first reading… start pedaling")
             }
         } catch (e: Exception) {
@@ -192,7 +194,7 @@ class PelotonV1Source(private val context: Context) : SensorSource {
     }
 
     override fun stop() {
-        service?.let { transactCallback(it, PelotonService.V1_TX_UNREGISTER_CALLBACK) }
+        service?.let { transactCallback(it, protocol().v1UnregisterCallback) }
         binder?.unbind()
         binder = null
         service = null
@@ -205,7 +207,11 @@ class PelotonV1Source(private val context: Context) : SensorSource {
  * Peloton Bike+: `IBikeInterface` is polled; transaction 14 returns the current BikeData.
  * The Bike+ reports its resistance in targetResistance.
  */
-class PelotonBikePlusSource(private val context: Context, private val pollMs: Long = 250L) : SensorSource {
+class PelotonBikePlusSource(
+    private val context: Context,
+    private val protocol: () -> PelotonProtocol = { PelotonProtocol() },
+    private val pollMs: Long = 250L,
+) : SensorSource {
     override val name = "Peloton Bike+"
     private val _status = MutableStateFlow(SensorStatus(SensorState.STOPPED, name))
     override val status: StateFlow<SensorStatus> = _status.asStateFlow()
@@ -260,7 +266,8 @@ class PelotonBikePlusSource(private val context: Context, private val pollMs: Lo
         val reply = Parcel.obtain()
         try {
             data.writeInterfaceToken(PelotonService.BIKE_PLUS_INTERFACE)
-            guardedTransact(b, PelotonService.BIKE_PLUS_INTERFACE, PelotonService.BIKE_PLUS_TX_GET_BIKE_DATA, data, reply)
+            val p = protocol()
+            guardedTransact(b, PelotonService.BIKE_PLUS_INTERFACE, p.bikePlusGetBikeData, data, reply, p)
             reply.readException()
             reply.readInt() // non-null marker
             return PelotonBikeData.decode(AndroidParcelSource(reply))
