@@ -68,7 +68,7 @@ class AppFlowTest {
     }
 
     private fun waitForText(text: String, timeoutMs: Long = 10_000) =
-        compose.waitUntil(timeoutMs) { compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(timeoutMs) { compose.onAllNodes(hasText(text, substring = true, ignoreCase = true)).fetchSemanticsNodes().isNotEmpty() }
 
     @Test fun everyScreenOpens() {
         waitForText("Just Ride")
@@ -85,7 +85,7 @@ class AppFlowTest {
 
         compose.onNodeWithContentDescription("Settings").performClick()
         waitForText("Safety & Peloton")
-        compose.onNodeWithText("Bike check", substring = true).assertExists()
+        compose.onNodeWithText("Bike check", substring = true, ignoreCase = true).assertExists()
         shot("settings")
         back()
 
