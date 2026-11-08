@@ -34,6 +34,26 @@ BikeOS is built so it can't damage the bike or leave it unusable:
 | Tablet-wide Bluetooth name | Not changed by default. The custom name is opt-in, the original name is saved first, and it's restored automatically (or via **Restore Bluetooth name**). |
 | Getting stuck | `adb uninstall com.bikeos` returns the bike to stock. Peloton becomes the home screen again automatically, and your Peloton account and data are untouched. |
 
+### Bike check: BikeOS reads Peloton's own code before talking to the bike
+At startup, BikeOS reads (never modifies) the installed APK of Peloton's sensor service. Installed APKs are readable by any app, so no root is needed. It parses the code (DEX), confirms the Binder interfaces it relies on exist on **your** firmware, and reads the real transaction numbers from Peloton's AIDL stubs:
+- If a Peloton update **renumbered** a call, BikeOS adapts automatically. The safety allowlist follows the adapted numbers, so it still only allows those specific named calls.
+- If an interface is **missing**, BikeOS tries the other sensor interfaces instead of failing.
+- On a **Bike+**, it looks for the set-resistance call by name (`setResistance` / `setTargetResistance`…). Settings → Bike sensor shows it with a **Use it** button, so no guessing is needed. It's never auto-enabled, and never picked if the name doesn't clearly mean "set resistance" (e.g. calibration calls are excluded).
+
+Results are under **Settings → Bike sensor → Bike check**.
+
+### How it's tested
+- **55+ JVM unit tests** (`./gradlew :core:test`): sensor parcel decoding, ride maths, power zones, workouts, Bluetooth FTMS/CPS/CSC encoding, TCX export, the safety allowlist, the resistance limiter, the DEX scanner (including obfuscated and renumbered code) and the Wi-Fi dashboard.
+- **On-device tests on Android emulators matching the Peloton tablets**: API 25 / Android 7.1 (Bike) and API 29 / Android 10 (Bike+), on a tablet-sized screen, run in CI on every push. They:
+  - check that the scanner reads **real AIDL compiler output** correctly
+  - check that the guard blocks every non-allowlisted call before it is sent
+  - check that motor control can't be created off a Bike+
+  - open every main screen
+  - ride for over a minute on the simulator, then check the ride is recorded, saved and exported to TCX
+  - check that pedaling auto-starts a ride and that the Wi-Fi dashboard serves live data
+
+What the tests **can't** cover is Peloton's real sensor service, which only exists on the bike. That's what the bike check is for.
+
 What BikeOS **can't** promise: a future Peloton OTA update may change the sensor service so BikeOS stops seeing data. That doesn't harm the bike. Settings → Bike sensor shows the status. Peloton also restricts sideloading on newer OS versions to active members, and installing third-party apps is your own choice and responsibility.
 
 ## What "a new OS" means here (and what it doesn't)
