@@ -74,7 +74,11 @@ class BikePeripheral(private val context: Context) {
 
     fun start(deviceName: String) {
         if (server != null) return
-        val adapter = manager?.adapter
+        val manager = manager ?: run {
+            _status.value = PeripheralStatus(supported = false, error = "No Bluetooth on this device")
+            return
+        }
+        val adapter = manager.adapter
         if (adapter == null || !adapter.isEnabled) {
             _status.value = PeripheralStatus(supported = adapter != null, error = "Bluetooth is off")
             return
@@ -267,7 +271,7 @@ class BikePeripheral(private val context: Context) {
             if (descriptor.uuid == GattIds.CCCD) {
                 val uuid = descriptor.characteristic.uuid
                 val enable = value != null && value.isNotEmpty() && value[0].toInt() != 0
-                val set = subscriptions.getOrPut(uuid) { ConcurrentHashMap.newKeySet() }
+                val set = subscriptions.getOrPut(uuid) { ConcurrentHashMap.newKeySet<BluetoothDevice>() }
                 if (enable) set.add(device) else set.remove(device)
                 Log.d("BikeOS.BLE", "${device.address} ${if (enable) "subscribed" else "unsubscribed"} $uuid")
             }
