@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -191,10 +190,10 @@ fun LiveRideScreen(nav: Navigator) {
                 }
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     SurfaceCard(Modifier.weight(1f).fillMaxHeight(), padding = 4.dp) {
-                        TargetGauge("Cadence", s.cadenceRpm, "rpm", BikeColors.Cadence, 0f, 130f, seg?.cadence, eval?.cadence ?: TargetStatus.NONE, Modifier.fillMaxSize().aspectRatio(1f, matchHeightConstraintsFirst = true))
+                        TargetGauge("Cadence", s.cadenceRpm, "rpm", BikeColors.Cadence, 0f, 130f, seg?.cadence, eval?.cadence ?: TargetStatus.NONE, Modifier.fillMaxSize())
                     }
                     SurfaceCard(Modifier.weight(1f).fillMaxHeight(), padding = 4.dp) {
-                        TargetGauge("Resistance", s.resistancePct, "%", BikeColors.Resistance, 0f, 100f, seg?.resistance, eval?.resistance ?: TargetStatus.NONE, Modifier.fillMaxSize().aspectRatio(1f, matchHeightConstraintsFirst = true))
+                        TargetGauge("Resistance", s.resistancePct, "%", BikeColors.Resistance, 0f, 100f, seg?.resistance, eval?.resistance ?: TargetStatus.NONE, Modifier.fillMaxSize())
                     }
                 }
                 SurfaceCard(Modifier.fillMaxWidth(), padding = 16.dp) {

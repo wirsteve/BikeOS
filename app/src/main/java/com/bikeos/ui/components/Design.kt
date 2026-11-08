@@ -324,7 +324,7 @@ fun categoryLabel(c: WorkoutCategory) = when (c) {
 /** Class card: artwork with duration badge, title and meta below. */
 @Composable
 fun ClassCard(workout: Workout, modifier: Modifier = Modifier, artHeight: Dp = 150.dp, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick)) {
+    Column(modifier.clickable(onClick = onClick)) {
         ClassArt(workout, Modifier.fillMaxWidth().height(artHeight)) {
             Badge("${workout.durationMin} min", Modifier.align(Alignment.TopStart).padding(10.dp))
             Text(
@@ -364,4 +364,26 @@ fun GoalMeter(label: String, value: Int, goal: Int, unit: String, color: Color, 
 @Composable
 fun SurfaceCard(modifier: Modifier = Modifier, padding: Dp = 20.dp, color: Color = BikeColors.Surface, content: @Composable () -> Unit) {
     Box(modifier.clip(RoundedCornerShape(24.dp)).background(color).border(1.dp, BikeColors.Outline, RoundedCornerShape(24.dp)).padding(padding)) { content() }
+}
+
+/** Seven-day activity bars (minutes per day), today highlighted. */
+@Composable
+fun WeekBars(minutes: List<Int>, labels: List<String>, modifier: Modifier = Modifier, color: Color = BikeColors.Accent) {
+    val max = (minutes.maxOrNull() ?: 0).coerceAtLeast(20)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Bottom) {
+        minutes.forEachIndexed { i, m ->
+            val today = i == minutes.lastIndex
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.fillMaxWidth().height(64.dp), contentAlignment = Alignment.BottomCenter) {
+                    Box(
+                        Modifier.fillMaxWidth(0.6f).fillMaxHeight((m.toFloat() / max).coerceIn(0.06f, 1f))
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (m == 0) BikeColors.SurfaceHigher else if (today) color else color.copy(alpha = 0.55f)),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(labels[i], style = MaterialTheme.typography.labelSmall, color = if (today) BikeColors.Text else BikeColors.TextFaint)
+            }
+        }
+    }
 }

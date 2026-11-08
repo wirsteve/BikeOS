@@ -86,6 +86,7 @@ import com.bikeos.ui.components.PrimaryButton
 import com.bikeos.ui.components.RowHeader
 import com.bikeos.ui.components.SurfaceCard
 import com.bikeos.ui.components.TabBar
+import com.bikeos.ui.components.WeekBars
 import com.bikeos.ui.components.categoryLabel
 import com.bikeos.ui.components.difficultyLabel
 import com.bikeos.ui.theme.BikeColors
@@ -251,7 +252,7 @@ private fun HomeTab(nav: Navigator, open: (CatalogApp) -> Unit) {
         Text(greeting(settings.riderName), style = MaterialTheme.typography.headlineLarge, color = BikeColors.Text)
         Spacer(Modifier.height(18.dp))
 
-        Row(Modifier.fillMaxWidth().height(400.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(Modifier.fillMaxWidth().height(460.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             // Featured class hero
             if (featured != null) {
                 ClassArt(featured, Modifier.weight(0.62f).fillMaxHeight().clickable { nav.go(Screen.WorkoutDetail(featured.id)) }) {
@@ -332,6 +333,18 @@ private fun TodayCard(modifier: Modifier) {
                 GoalMeter("Output", todayKj, 300, "kJ", BikeColors.Ice)
             }
             Spacer(Modifier.weight(1f))
+            val week = remember(rides) {
+                val cal = Calendar.getInstance()
+                (6 downTo 0).map { back ->
+                    val day = (cal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -back); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0) }
+                    val start = day.timeInMillis
+                    val end = start + 24 * 3600 * 1000L
+                    val label = java.text.SimpleDateFormat("EEEEE", java.util.Locale.getDefault()).format(day.time)
+                    rides.filter { it.startedAtMs in start until end }.sumOf { it.stats.elapsedSec } / 60 to label
+                }
+            }
+            WeekBars(week.map { it.first }, week.map { it.second }, Modifier.fillMaxWidth())
+            Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("This week: ${sum.weekRides} rides · ${sum.weekMinutes} min · ${sum.weekKj} kJ", style = MaterialTheme.typography.bodyMedium, color = BikeColors.TextDim, modifier = Modifier.weight(1f))
                 val mfp = g.catalog.entries.first { it.id == "mfp" }
