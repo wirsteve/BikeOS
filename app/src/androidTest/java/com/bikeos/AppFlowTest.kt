@@ -99,9 +99,9 @@ class AppFlowTest {
         back()
 
         compose.onNodeWithText("Home").performClick() // back to the Home tab
-        // The service cards sit in a horizontal row inside the vertically scrolling page:
-        // scroll the page to that row first, then the row to the card.
-        compose.onNodeWithText("Train with").performScrollTo()
+        // The service cards sit in a horizontal row inside the vertically scrolling page. Scroll the
+        // page until the heading *below* the Train row is visible, so the whole row is on screen.
+        compose.onNodeWithText("Watch while you ride").performScrollTo()
         compose.onNodeWithText("Apple Fitness+").performScrollTo().performClick()
         waitForText("Apple Fitness+ on your bike")
         compose.onNodeWithText("Pair your Apple Watch", substring = true).assertExists()
