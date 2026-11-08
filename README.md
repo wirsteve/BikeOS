@@ -17,6 +17,14 @@
 - **Second screen:** an optional Wi-Fi dashboard so any phone or iPad can show your live bike stats.
 - **Built to be safe:** BikeOS only makes allowlisted read-only calls to Peloton's service, caps and rate-limits any motor control, has a safe mode for crash loops, and never modifies Peloton's software (see [Safety](#safety-bikeos-wont-break-your-peloton)).
 
+![BikeOS home screen](docs/screenshots/home.png)
+
+| A class in progress | Apple Fitness+ setup |
+|---|---|
+| ![Live workout](docs/screenshots/workout_live.png) | ![Apple Fitness+](docs/screenshots/apple_fitness.png) |
+
+*Screenshots are captured automatically by CI on a tablet-sized Android 10 emulator with the built-in bike simulator.*
+
 > BikeOS is independent software. It is not affiliated with or endorsed by Peloton. It relies on undocumented interfaces that a Peloton software update can change at any time.
 
 ---
