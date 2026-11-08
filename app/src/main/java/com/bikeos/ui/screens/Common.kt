@@ -127,7 +127,7 @@ fun StatBlock(label: String, value: String, unit: String = "", color: Color = Bi
     Column(modifier) {
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = BikeColors.TextDim)
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(value, color = color, fontSize = 26.sp, fontWeight = FontWeight.Black)
+            Text(value, color = color, fontSize = 34.sp, fontFamily = com.bikeos.ui.theme.BikeFonts.Display, fontWeight = FontWeight.ExtraBold, lineHeight = 34.sp)
             if (unit.isNotEmpty()) Text(unit, color = BikeColors.TextDim, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
         }
     }

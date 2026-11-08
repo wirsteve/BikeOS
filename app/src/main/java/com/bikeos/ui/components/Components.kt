@@ -50,9 +50,9 @@ fun Card(
 ) {
     Box(
         modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(color)
-            .border(1.dp, BikeColors.Outline, RoundedCornerShape(20.dp))
+            .border(1.dp, BikeColors.Outline, RoundedCornerShape(24.dp))
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .padding(padding),
     ) { content() }
@@ -72,7 +72,7 @@ fun Metric(
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = BikeColors.TextDim)
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, fontSize = valueSize, fontWeight = FontWeight.Black, color = color, maxLines = 1)
+            Text(value, fontSize = valueSize, fontFamily = com.bikeos.ui.theme.BikeFonts.Display, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1, lineHeight = valueSize)
             Spacer(Modifier.width(4.dp))
             Text(unit, style = MaterialTheme.typography.bodyMedium, color = BikeColors.TextDim, modifier = Modifier.padding(bottom = 6.dp))
         }
@@ -141,7 +141,7 @@ fun LineChart(
         fill.lineTo(size.width, size.height)
         fill.close()
         drawPath(fill, color.copy(alpha = 0.18f))
-        drawPath(path, color, style = Stroke(width = 3f))
+        drawPath(path, color, style = Stroke(width = 4f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
     }
 }
 

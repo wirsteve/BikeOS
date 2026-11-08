@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bikeos.Permissions
@@ -45,6 +46,8 @@ sealed class Screen {
 /** Simple back-stack navigator; BikeOS has few enough screens not to need a nav library. */
 class Navigator {
     val stack = mutableStateListOf<Screen>(Screen.Home)
+    /** Selected top tab on the home screen (Home, Classes, Apps); survives visits to other screens. */
+    var homeTab by androidx.compose.runtime.mutableIntStateOf(0)
     val current: Screen get() = stack.last()
     fun go(s: Screen) {
         if (s == Screen.Home) {

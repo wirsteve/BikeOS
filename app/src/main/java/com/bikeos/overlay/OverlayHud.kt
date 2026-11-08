@@ -71,8 +71,8 @@ fun OverlayHud(onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit, onOpenBike
 
     Column(
         Modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xE607090D))
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xEB0B0B10))
             .border(1.dp, BikeColors.Outline, RoundedCornerShape(18.dp))
             .padding(horizontal = 10.dp, vertical = 8.dp)
             .widthIn(max = 1100.dp),
@@ -149,7 +149,7 @@ fun OverlayHud(onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit, onOpenBike
 private fun HudValue(value: String, unit: String, color: Color, compact: Boolean, target: String? = null, status: TargetStatus? = null) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, color = color, fontSize = if (compact) 22.sp else 30.sp, fontWeight = FontWeight.Black)
+            Text(value, color = color, fontSize = if (compact) 28.sp else 38.sp, fontFamily = com.bikeos.ui.theme.BikeFonts.Display, fontWeight = FontWeight.ExtraBold, lineHeight = if (compact) 28.sp else 38.sp)
             Spacer(Modifier.width(3.dp))
             Text(unit, color = BikeColors.TextDim, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
         }

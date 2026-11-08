@@ -80,7 +80,7 @@ class AppFlowTest {
         compose.waitUntil(10_000) { g.sensors.status.value.state == com.bikeos.sensor.SensorState.CONNECTED }
         shot("home")
 
-        compose.onNodeWithText("Workouts").performScrollTo().performClick()
+        compose.onNodeWithText("Classes").performClick() // top tab
         waitForText("Power Zone")
         shot("workouts")
         compose.onNodeWithText("20 min Low Impact").performClick() // 2nd card: visible without scrolling
@@ -98,15 +98,19 @@ class AppFlowTest {
         waitForText("Ride history")
         back()
 
+        compose.onNodeWithText("Home").performClick() // back to the Home tab
         compose.onNodeWithText("Apple Fitness+").performScrollTo().performClick()
         waitForText("Apple Fitness+ on your bike")
         compose.onNodeWithText("Pair your Apple Watch", substring = true).assertExists()
         shot("apple_fitness")
         back()
 
+        compose.onNodeWithText("Apps").performClick() // top tab
+        shot("apps")
         compose.onNodeWithText("All apps").performScrollTo().performClick()
         waitForText("Long-press to pin")
         back()
+        compose.onNodeWithText("Home").performClick()
         waitForText("Just Ride")
     }
 
