@@ -153,6 +153,18 @@ Apple only makes Fitness+ for iPhone, iPad and Apple TV, so there's no Android a
 4. **Stats on your iPhone/iPad (optional).** Turn on the Wi-Fi dashboard and open the address it shows in Safari.
 5. **Start ride & open AirPlay.** BikeOS starts recording, switches the overlay to compact and opens the receiver.
 
+### Video rides
+The **Videos** tab plays video full-screen with your ride on top: a live metric bar, class targets with a countdown, resistance coaching, and automatic recording.
+- **Ride-along classes and scenic rides:** curated YouTube searches open inside BikeOS. Tap any result to ride along. YouTube plays through its official embedded player. A few uploaders block embedding; for those BikeOS offers "Open in YouTube".
+- **Scenic mode:** video speed follows your pedaling, roughly 1× at 18 mph and between 0.25× and 2×. Stop and the video pauses.
+- **Add a class:** run any BikeOS class over any video for structured targets.
+- **Your own videos:** copy MP4s to the tablet (`adb push ride.mp4 /sdcard/Movies/`) and allow access. You can also paste a link to a YouTube video or a direct MP4 / HLS / DASH stream.
+- **Peloton and Apple Fitness+ classes** are their own paid content. They play in their own apps (Peloton app, Peloton App web, Apple Fitness+ via AirPlay), with BikeOS recording and its overlay on top.
+
+![Video ride](docs/screenshots/video_ride.png)
+
+*The screenshot uses an abstract test clip that CI generates; your own videos play the same way.*
+
 ### Second screen: Wi-Fi dashboard
 Settings → **Second screen** serves a live, read-only dashboard at `http://<bike-ip>:8080` on your home network. It shows power and zone, cadence, resistance, HR, targets and resistance prompts, and updates every second. It works in any browser (iPhone, iPad, laptop) and is handy when the class is playing on a TV. JSON is at `/api/live`, with a live stream at `/api/stream` for tinkerers (e.g. Home Assistant). There are no endpoints that change anything.
 
