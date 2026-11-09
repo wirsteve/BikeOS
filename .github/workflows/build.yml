@@ -73,6 +73,14 @@ jobs:
       - name: Build app and tests
         run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
 
+      - name: Generate an original test ride clip
+        run: |
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          ffmpeg -loglevel error -y -f lavfi -i "gradients=s=1280x720:c0=0x0b1f3a:c1=0x1d6fa5:c2=0x3ddc97:c3=0xff7a3a:speed=0.02:d=40" \
+            -c:v libx264 -pix_fmt yuv420p bikeos_test_ride.mp4 \
+            || ffmpeg -loglevel error -y -f lavfi -i "testsrc2=s=1280x720:d=40" -c:v libx264 -pix_fmt yuv420p bikeos_test_ride.mp4
+          ls -la bikeos_test_ride.mp4
+
       - name: Run on-device tests (API ${{ matrix.api }})
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -87,6 +95,7 @@ jobs:
           # Each line runs separately. The connected task uninstalls the app (and its screenshots) when it
           # finishes, so screenshots come from a second run that leaves the app installed.
           script: |
+            adb push bikeos_test_ride.mp4 /sdcard/Movies/bikeos_test_ride.mp4
             ./gradlew --no-daemon :app:connectedDebugAndroidTest || (adb logcat -d -t 3000 | grep -iE "BikeOS|AndroidRuntime|FATAL" | tail -200; exit 1)
             ./gradlew --no-daemon :app:installDebug :app:installDebugAndroidTest
             adb shell appops set com.bikeos SYSTEM_ALERT_WINDOW allow

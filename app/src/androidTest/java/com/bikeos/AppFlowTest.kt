@@ -41,7 +41,7 @@ class AppFlowTest {
 
     @get:Rule
     val rules: RuleChain = RuleChain
-        .outerRule(GrantPermissionRule.grant(Manifest.permission.ACCESS_FINE_LOCATION))
+        .outerRule(GrantPermissionRule.grant(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.READ_EXTERNAL_STORAGE))
         .around(compose)
 
     private val ctx = InstrumentationRegistry.getInstrumentation().targetContext
@@ -158,7 +158,7 @@ class AppFlowTest {
         runOnMain { g.ride.finish(save = false) }
     }
 
-    /** Videos tab, then a scenic video ride (Big Buck Bunny, CC-BY Blender Foundation, as a stand-in clip). */
+    /** Videos tab, then a scenic ride on a local file (an original test clip that CI generates with ffmpeg and pushes). */
     @Test fun videoRide() {
         waitForText("Just Ride")
         compose.waitUntil(10_000) { g.sensors.status.value.state == com.bikeos.sensor.SensorState.CONNECTED }
@@ -166,10 +166,7 @@ class AppFlowTest {
         waitForText("Scenic rides")
         shot("videos")
         val ride = com.bikeos.core.video.VideoRide(
-            com.bikeos.core.video.VideoSource.Media(
-                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                "Sample video (Big Buck Bunny, CC-BY Blender Foundation)",
-            ),
+            com.bikeos.core.video.VideoSource.Media("file:///sdcard/Movies/bikeos_test_ride.mp4", "Test ride clip"),
             scenic = true,
         )
         compose.activityRule.scenario.onActivity { it.nav.go(com.bikeos.ui.Screen.VideoRide(ride)) }
@@ -177,7 +174,7 @@ class AppFlowTest {
         compose.waitUntil(15_000) { g.ride.state.value.active }
         waitForText("Scenic: video speed follows you")
         waitForText("output")
-        Thread.sleep(12_000) // let the stream buffer for the screenshot
+        Thread.sleep(6_000) // let playback start for the screenshot
         compose.waitForIdle()
         shot("video_ride")
         assertTrue(g.videos.recents.value.isNotEmpty())
