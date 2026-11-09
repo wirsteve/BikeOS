@@ -55,6 +55,7 @@ class AppGraph(val context: Context, val safeMode: Boolean) {
     val rides = RideRepository(context)
     val workouts = WorkoutRepository(context)
     val catalog = AppCatalog(context)
+    val videos = com.bikeos.video.VideoStore(context)
     val ride = RideController(scope, settings, sensors, heartRate.bpm, peripheral, rides)
     private var dashboard: DashboardServer? = null
 

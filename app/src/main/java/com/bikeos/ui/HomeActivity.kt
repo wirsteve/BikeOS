@@ -21,6 +21,8 @@ import com.bikeos.ride.Foreground
 import com.bikeos.ui.screens.AllAppsScreen
 import com.bikeos.ui.screens.AppleFitnessScreen
 import com.bikeos.ui.screens.SafeModeScreen
+import com.bikeos.ui.screens.VideoRideScreen
+import com.bikeos.ui.screens.VideoSearchScreen
 import com.bikeos.ui.screens.HistoryScreen
 import com.bikeos.ui.screens.HomeScreen
 import com.bikeos.ui.screens.LiveRideScreen
@@ -41,6 +43,8 @@ sealed class Screen {
     object Settings : Screen()
     object AllApps : Screen()
     object AppleFitness : Screen()
+    data class VideoRide(val ride: com.bikeos.core.video.VideoRide) : Screen()
+    data class VideoSearch(val query: String, val scenic: Boolean) : Screen()
 }
 
 /** Simple back-stack navigator; BikeOS has few enough screens not to need a nav library. */
@@ -72,7 +76,8 @@ class Navigator {
  * home screen once selected as the default (see README).
  */
 class HomeActivity : ComponentActivity() {
-    private val nav = Navigator()
+    /** Exposed for on-device tests. */
+    val nav = Navigator()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -120,6 +125,7 @@ class HomeActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == Permissions.REQUEST_CODE) graph.restartBluetoothBroadcast()
+        // requestCode 77 (video storage access) needs nothing here: the Videos tab re-checks on its own.
     }
 }
 
@@ -129,7 +135,8 @@ private fun Router(nav: Navigator) {
     val ride by g.ride.state.collectAsStateWithLifecycle()
     // When a ride is started from inside BikeOS, show the live dashboard.
     LaunchedEffect(ride.startedAtMs) {
-        if (ride.active && !ride.autoStarted && nav.current != Screen.Live) nav.go(Screen.Live)
+        // (Video rides keep their own full-screen player instead.)
+        if (ride.active && !ride.autoStarted && nav.current != Screen.Live && nav.current !is Screen.VideoRide) nav.go(Screen.Live)
     }
     when (val s = nav.current) {
         Screen.Home -> HomeScreen(nav)
@@ -141,5 +148,7 @@ private fun Router(nav: Navigator) {
         Screen.Settings -> SettingsScreen(nav)
         Screen.AllApps -> AllAppsScreen(nav)
         Screen.AppleFitness -> AppleFitnessScreen(nav)
+        is Screen.VideoRide -> VideoRideScreen(nav, s.ride)
+        is Screen.VideoSearch -> VideoSearchScreen(nav, s.query, s.scenic)
     }
 }

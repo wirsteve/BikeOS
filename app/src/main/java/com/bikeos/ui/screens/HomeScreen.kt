@@ -94,7 +94,7 @@ import com.bikeos.ui.theme.BikeFonts
 import java.util.Calendar
 import kotlin.math.roundToInt
 
-private val TABS = listOf("Home", "Classes", "Apps")
+private val TABS = listOf("Home", "Classes", "Videos", "Apps")
 
 @Composable
 fun HomeScreen(nav: Navigator) {
@@ -119,6 +119,7 @@ fun HomeScreen(nav: Navigator) {
             when (nav.homeTab) {
                 0 -> HomeTab(nav, ::open)
                 1 -> Box(Modifier.padding(horizontal = 40.dp)) { ClassLibrary(nav) }
+                2 -> VideosTab(nav)
                 else -> AppsTab(nav, ::open)
             }
         }
@@ -284,6 +285,14 @@ private fun HomeTab(nav: Navigator, open: (CatalogApp) -> Unit) {
             classes.forEach { w -> ClassCard(w, Modifier.width(300.dp)) { nav.go(Screen.WorkoutDetail(w.id)) } }
         }
 
+        Spacer(Modifier.height(36.dp))
+        RowHeader("Ride with video", action = "Browse") { nav.homeTab = 2 }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            (com.bikeos.core.video.VideoCollections.classes.take(3) + com.bikeos.core.video.VideoCollections.scenic.take(3)).forEach { c ->
+                VideoPromoCard(c.title, if (c.scenic) "Scenic ride" else "Ride-along class", c.scenic) { nav.go(Screen.VideoSearch(c.query, c.scenic)) }
+            }
+        }
+
         listOf(
             "Train with" to listOf(AppSection.FITNESS),
             "Watch while you ride" to listOf(AppSection.WATCH),
@@ -292,7 +301,7 @@ private fun HomeTab(nav: Navigator, open: (CatalogApp) -> Unit) {
             val apps = g.catalog.entries.filter { it.section in sections && it.id !in settings.hiddenCatalogIds }
             if (apps.isEmpty()) return@forEach
             Spacer(Modifier.height(36.dp))
-            RowHeader(title, action = "All apps") { nav.homeTab = 2 }
+            RowHeader(title, action = "All apps") { nav.homeTab = 3 }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 apps.forEach { app -> ServiceCard(app) { open(app) } }
             }
@@ -546,5 +555,19 @@ private fun BigStat(label: String, value: String, unit: String, color: Color, sm
             Text(value, fontFamily = BikeFonts.Display, fontWeight = FontWeight.ExtraBold, fontSize = if (small) 40.sp else 60.sp, color = color, lineHeight = if (small) 40.sp else 60.sp)
             if (unit.isNotEmpty()) Text(" $unit", style = MaterialTheme.typography.labelMedium, color = BikeColors.TextDim, modifier = Modifier.padding(bottom = 8.dp))
         }
+    }
+}
+
+@Composable
+private fun VideoPromoCard(title: String, kind: String, scenic: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.width(260.dp).height(132.dp).clip(RoundedCornerShape(22.dp))
+            .background(Brush.linearGradient(listOf(if (scenic) Color(0xFF0E4A3A) else Color(0xFF4A0E1E), BikeColors.Surface)))
+            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
+            .clickable(onClick = onClick).padding(16.dp),
+    ) {
+        Icon(Icons.Default.PlayCircle, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(34.dp))
+        Text(kind.uppercase(), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.align(Alignment.TopEnd))
+        Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, modifier = Modifier.align(Alignment.BottomStart))
     }
 }

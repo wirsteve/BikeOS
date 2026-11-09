@@ -158,6 +158,32 @@ class AppFlowTest {
         runOnMain { g.ride.finish(save = false) }
     }
 
+    /** Videos tab, then a scenic video ride (Big Buck Bunny, CC-BY Blender Foundation, as a stand-in clip). */
+    @Test fun videoRide() {
+        waitForText("Just Ride")
+        compose.waitUntil(10_000) { g.sensors.status.value.state == com.bikeos.sensor.SensorState.CONNECTED }
+        compose.onNodeWithText("Videos").performClick()
+        waitForText("Scenic rides")
+        shot("videos")
+        val ride = com.bikeos.core.video.VideoRide(
+            com.bikeos.core.video.VideoSource.Media(
+                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                "Sample video (Big Buck Bunny, CC-BY Blender Foundation)",
+            ),
+            scenic = true,
+        )
+        compose.activityRule.scenario.onActivity { it.nav.go(com.bikeos.ui.Screen.VideoRide(ride)) }
+        waitForText("End ride")
+        compose.waitUntil(15_000) { g.ride.state.value.active }
+        waitForText("Scenic: video speed follows you")
+        waitForText("output")
+        Thread.sleep(12_000) // let the stream buffer for the screenshot
+        compose.waitForIdle()
+        shot("video_ride")
+        assertTrue(g.videos.recents.value.isNotEmpty())
+        runOnMain { g.ride.finish(save = false) }
+    }
+
     @Test fun pedalingAutoStartsARide() {
         runOnMain { g.settings.update { it.copy(autoStartRide = true) } }
         compose.waitUntil(20_000) { g.ride.state.value.active }
