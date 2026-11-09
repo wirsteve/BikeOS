@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -111,6 +113,24 @@ fun OverlayHud(onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit, onOpenBike
                 }
                 HudButton(Icons.Default.Home, "BikeOS", onClick = onOpenBikeOS)
             }
+        }
+
+        // Bike control from inside any app: mode + nudge.
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val mode = ride.control
+            Text(
+                if (mode is com.bikeos.core.control.ControlMode.Off) "Auto-pilot: off  ›" else "Auto-pilot: ${mode.label}  ›",
+                color = if (mode is com.bikeos.core.control.ControlMode.Off) BikeColors.TextDim else BikeColors.Accent,
+                fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(BikeColors.SurfaceHigh).clickable { g.ride.cycleControl() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+            if (mode !is com.bikeos.core.control.ControlMode.Off) {
+                HudButton(Icons.Default.Remove, "Easier") { g.ride.nudgeControl(false) }
+                HudButton(Icons.Default.Add, "Harder") { g.ride.nudgeControl(true) }
+            }
+            ride.bridgeTarget?.let { (app, _) -> Text("Controlled by $app", color = BikeColors.Ice, fontSize = 13.sp) }
         }
 
         if (confirmEnd) {

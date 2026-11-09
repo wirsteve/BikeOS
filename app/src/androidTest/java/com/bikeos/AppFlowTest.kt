@@ -181,6 +181,40 @@ class AppFlowTest {
         runOnMain { g.ride.finish(save = false) }
     }
 
+    /** Another app on the bike sends a Bridge command; BikeOS takes it as the bike's target. */
+    @Test fun bridgeCommandsControlTheBike() {
+        runOnMain { g.settings.update { it.copy(bridgeEnabled = true) } }
+        ctx.sendBroadcast(
+            android.content.Intent(com.bikeos.core.control.BridgeCommand.ACTION_CONTROL).setPackage(ctx.packageName)
+                .putExtra("command", "power").putExtra("value", 210.0).putExtra("app", "Test Trainer"),
+        )
+        compose.waitUntil(10_000) { g.ride.state.value.suggestion?.reason?.contains("Test Trainer · ERG 210 W") == true }
+        ctx.sendBroadcast(
+            android.content.Intent(com.bikeos.core.control.BridgeCommand.ACTION_CONTROL).setPackage(ctx.packageName)
+                .putExtra("command", "power").putExtra("value", 99999.0).putExtra("app", "Bad App"),
+        )
+        Thread.sleep(1_500)
+        assertTrue("out-of-range command must be ignored", g.ride.state.value.bridgeTarget?.first == "Test Trainer")
+        ctx.sendBroadcast(android.content.Intent(com.bikeos.core.control.BridgeCommand.ACTION_CONTROL).setPackage(ctx.packageName).putExtra("command", "clear"))
+        compose.waitUntil(10_000) { g.ride.state.value.bridgeTarget == null }
+    }
+
+    /** Auto-pilot from the live ride screen: hold power, nudge it, and it steers the bike. */
+    @Test fun autoPilotHoldsPower() {
+        waitForText("Just Ride")
+        compose.waitUntil(10_000) { g.sensors.status.value.state == com.bikeos.sensor.SensorState.CONNECTED }
+        compose.onNodeWithText("Just Ride").performScrollTo().performClick()
+        waitForText("Auto-pilot")
+        compose.onNodeWithText("Power").performScrollTo().performClick()
+        compose.waitUntil(5_000) { g.ride.state.value.control is com.bikeos.core.control.ControlMode.TargetPower }
+        val before = (g.ride.state.value.control as com.bikeos.core.control.ControlMode.TargetPower).watts
+        compose.onNodeWithContentDescription("Harder").performScrollTo().performClick()
+        compose.waitUntil(5_000) { (g.ride.state.value.control as? com.bikeos.core.control.ControlMode.TargetPower)?.watts == before + 10 }
+        compose.waitUntil(5_000) { g.ride.state.value.suggestion?.reason?.startsWith("Auto-pilot") == true }
+        shot("autopilot")
+        runOnMain { g.ride.finish(save = false) }
+    }
+
     @Test fun pedalingAutoStartsARide() {
         runOnMain { g.settings.update { it.copy(autoStartRide = true) } }
         compose.waitUntil(20_000) { g.ride.state.value.active }

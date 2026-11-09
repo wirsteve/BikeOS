@@ -57,7 +57,7 @@ class RideService : LifecycleService(), SavedStateRegistryOwner {
         val g = graph
         lifecycleScope.launch {
             combine(g.ride.state, g.settings.state, Foreground.bikeOsVisible) { ride, s, home ->
-                s.overlayEnabled && !home && (ride.active || s.overlayWhenIdle)
+                s.overlayEnabled && !home && !ride.overlayHidden && (ride.active || s.overlayWhenIdle)
             }.distinctUntilChanged().collect { show -> if (show) showOverlay() else hideOverlay() }
         }
         lifecycleScope.launch {

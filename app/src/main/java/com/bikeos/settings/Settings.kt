@@ -46,6 +46,10 @@ data class Settings(
     val bleRenameAdapter: Boolean = false,
     val dashboardEnabled: Boolean = false,
     val dashboardPort: Int = 8080,
+    /** Let other Android apps on the bike read metrics and steer resistance (BikeOS Bridge). */
+    val bridgeEnabled: Boolean = true,
+    /** Per-app ride profiles (what happens to the bike when an app is opened from BikeOS). */
+    val appProfiles: Map<String, com.bikeos.core.control.AppProfile> = com.bikeos.core.control.AppProfiles.defaults,
     val terrainBase: Float = 30f,
     val terrainGain: Float = 3f,
     val followTrainerApps: Boolean = true,
@@ -99,6 +103,8 @@ class SettingsStore(context: Context) {
             bleRenameAdapter = getBoolean("bleRenameAdapter", d.bleRenameAdapter),
             dashboardEnabled = getBoolean("dashboardEnabled", d.dashboardEnabled),
             dashboardPort = getInt("dashboardPort", d.dashboardPort),
+            bridgeEnabled = getBoolean("bridgeEnabled", d.bridgeEnabled),
+            appProfiles = com.bikeos.core.control.AppProfiles.decode(getString("appProfiles", null)),
             terrainBase = getFloat("terrainBase", d.terrainBase),
             terrainGain = getFloat("terrainGain", d.terrainGain),
             followTrainerApps = getBoolean("followTrainerApps", d.followTrainerApps),
@@ -134,6 +140,8 @@ class SettingsStore(context: Context) {
             .putBoolean("bleRenameAdapter", s.bleRenameAdapter)
             .putBoolean("dashboardEnabled", s.dashboardEnabled)
             .putInt("dashboardPort", s.dashboardPort)
+            .putBoolean("bridgeEnabled", s.bridgeEnabled)
+            .putString("appProfiles", com.bikeos.core.control.AppProfiles.encode(s.appProfiles))
             .putFloat("terrainBase", s.terrainBase)
             .putFloat("terrainGain", s.terrainGain)
             .putBoolean("followTrainerApps", s.followTrainerApps)

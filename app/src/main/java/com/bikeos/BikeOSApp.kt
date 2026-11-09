@@ -97,6 +97,29 @@ class AppGraph(val context: Context, val safeMode: Boolean) {
         }
         restartBluetoothBroadcast()
         ride.start()
+        // BikeOS Bridge, read side: 1 Hz metrics broadcast to apps holding READ_METRICS.
+        scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1_000)
+                if (!settings.current.bridgeEnabled) continue
+                val st = ride.state.value
+                val i = Intent(com.bikeos.core.control.BridgeCommand.ACTION_METRICS)
+                    .putExtra("riding", st.active)
+                    .putExtra("paused", st.phase == RidePhase.PAUSED)
+                    .putExtra("power", st.sample.powerWatts.roundToInt())
+                    .putExtra("cadence", st.sample.cadenceRpm.roundToInt())
+                    .putExtra("resistance", st.sample.resistancePct.roundToInt())
+                    .putExtra("speedMph", st.sample.speedMph)
+                    .putExtra("heartRate", st.sample.heartRateBpm ?: -1)
+                    .putExtra("elapsedSec", st.stats.elapsedSec)
+                    .putExtra("outputKj", st.stats.workKj)
+                    .putExtra("calories", st.stats.calories)
+                    .putExtra("distanceMiles", st.stats.distanceMiles)
+                    .putExtra("targetResistance", st.suggestion?.resistance ?: -1f)
+                    .putExtra("controlledBy", st.suggestion?.reason)
+                runCatching { context.sendBroadcast(i, com.bikeos.core.control.BridgeCommand.PERMISSION_READ) }
+            }
+        }
         // Running cleanly for the crash window resets the safe-mode counter.
         scope.launch { kotlinx.coroutines.delay(CRASH_WINDOW_MS); settings.clearCrashes() }
     }
@@ -122,6 +145,32 @@ class AppGraph(val context: Context, val safeMode: Boolean) {
         val original = settings.originalBluetoothName ?: return
         if (settings.current.bleRenameAdapter) return
         if (peripheral.advertisedName != original) peripheral.restoreName(original)
+    }
+
+    /**
+     * Applies the rider's ride profile for an app being opened from BikeOS: overlay style, what the
+     * bike should do (just record, hold a power, a class…), and whether trainer apps may steer it.
+     */
+    fun applyProfile(appKey: String, label: String) {
+        val p = settings.current.appProfiles[appKey] ?: com.bikeos.core.control.AppProfiles.defaults[appKey] ?: return
+        when (p.overlay) {
+            com.bikeos.core.control.OverlayStyle.FULL -> { settings.update { it.copy(overlayCompact = false) }; ride.setOverlayHidden(false) }
+            com.bikeos.core.control.OverlayStyle.COMPACT -> { settings.update { it.copy(overlayCompact = true) }; ride.setOverlayHidden(false) }
+            com.bikeos.core.control.OverlayStyle.HIDDEN -> ride.setOverlayHidden(true)
+        }
+        ride.followTrainerOverride = p.followTrainer
+        when (val prog = p.program) {
+            com.bikeos.core.control.ProfileProgram.None -> Unit
+            com.bikeos.core.control.ProfileProgram.JustRide -> if (!ride.state.value.active) ride.justRide(label)
+            is com.bikeos.core.control.ProfileProgram.Control -> {
+                if (!ride.state.value.active) ride.justRide(label)
+                ride.setControl(prog.mode)
+            }
+            is com.bikeos.core.control.ProfileProgram.Workout -> workouts.find(prog.workoutId)?.let { w ->
+                if (ride.state.value.workout?.id != w.id) ride.startWorkout(w, companionApp = label)
+            }
+        }
+        ride.setCompanionApp(label)
     }
 
     fun ensureServiceRunning() {

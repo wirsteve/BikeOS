@@ -190,6 +190,16 @@ fun SettingsScreen(nav: Navigator) {
                     SettingRow("Hill feel: flat-road resistance") { Stepper("${s.terrainBase.roundToInt()}", { update { it.copy(terrainBase = (it.terrainBase - 1).coerceAtLeast(0f)) } }, { update { it.copy(terrainBase = (it.terrainBase + 1).coerceAtMost(80f)) } }) }
                     SettingRow("Hill feel: resistance per 1% grade") { Stepper("%.1f".format(s.terrainGain), { update { it.copy(terrainGain = (it.terrainGain - 0.5f).coerceAtLeast(0.5f)) } }, { update { it.copy(terrainGain = (it.terrainGain + 0.5f).coerceAtMost(10f)) } }) }
                 }
+                Section("Apps controlling the bike") {
+                    Text(
+                        "Bluetooth trainer apps (Zwift, Rouvy, TrainerRoad…) on another device control resistance through the smart-trainer " +
+                            "broadcast above. Apps installed on the bike itself use the BikeOS Bridge instead: they can read live metrics and, " +
+                            "once you approve them in Android's permission prompt, set power, resistance or grade. Every command goes through " +
+                            "the same safety limits. Ride profiles: long-press an app in the Apps tab.",
+                        color = BikeColors.TextDim,
+                    )
+                    ToggleRow("Enable BikeOS Bridge", "Developer docs: docs/BRIDGE.md in the BikeOS repository", s.bridgeEnabled) { v -> update { it.copy(bridgeEnabled = v) } }
+                }
                 Section("Second screen (Wi-Fi dashboard)") {
                     Text(
                         "Show live bike stats in Safari/Chrome on any phone, iPad or laptop on your Wi-Fi — e.g. next to Apple Fitness+ " +

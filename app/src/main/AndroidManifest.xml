@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- BikeOS Bridge: other apps on the bike can read metrics (normal) and, with the rider's
+         approval, control the bike (dangerous = runtime prompt). See docs/BRIDGE.md. -->
+    <permission
+        android:name="com.bikeos.permission.CONTROL_BIKE"
+        android:label="@string/perm_control_label"
+        android:description="@string/perm_control_desc"
+        android:protectionLevel="dangerous" />
+    <permission
+        android:name="com.bikeos.permission.READ_METRICS"
+        android:label="@string/perm_read_label"
+        android:description="@string/perm_read_desc"
+        android:protectionLevel="normal" />
+
     <!-- Peloton's on-tablet sensor service -->
     <uses-permission android:name="onepeloton.permission.ACCESS_SENSOR_SERVICE" />
 
@@ -78,6 +91,15 @@
         <service
             android:name=".ride.RideService"
             android:exported="false" />
+
+        <receiver
+            android:name=".bridge.BridgeReceiver"
+            android:exported="true"
+            android:permission="com.bikeos.permission.CONTROL_BIKE">
+            <intent-filter>
+                <action android:name="com.bikeos.bridge.CONTROL" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".ride.BootReceiver"

@@ -37,6 +37,7 @@ fun AllAppsScreen(nav: Navigator) {
                         app.label, BikeColors.SurfaceHigh, app.icon, if (pinned) "PIN" else null,
                         onClick = {
                             g.ride.setCompanionApp(app.label)
+                            g.applyProfile(app.packageName, app.label)
                             g.catalog.launchPackage(app.packageName)
                         },
                         onLongClick = {

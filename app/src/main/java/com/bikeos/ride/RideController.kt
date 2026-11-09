@@ -57,6 +57,12 @@ data class RideState(
     val trainerTarget: TrainerTarget = TrainerTarget.None,
     val autoStarted: Boolean = false,
     val lastFinished: RideRecord? = null,
+    /** Auto-pilot mode set by the rider, an app profile, or the overlay. */
+    val control: com.bikeos.core.control.ControlMode = com.bikeos.core.control.ControlMode.Off,
+    /** Latest command from another app on the bike via the BikeOS Bridge (with the app's name). */
+    val bridgeTarget: Pair<String, TrainerTarget>? = null,
+    /** Set by an app profile: hide the floating overlay while that app is open. */
+    val overlayHidden: Boolean = false,
 ) {
     val active: Boolean get() = phase != RidePhase.IDLE
 }
@@ -89,6 +95,45 @@ class RideController(
     private val powerHistory = ArrayDeque<Float>()
     private var resistanceController: ResistanceController = ManualResistance
     private var resistanceControllerKey: String? = null
+    private val autoPilot = com.bikeos.core.control.AutoPilot(hub.resistanceModel)
+    /** App profiles can turn off following Bluetooth trainer apps while a given app is open. */
+    var followTrainerOverride: Boolean? = null
+
+    // ---------- bike control from anywhere (overlay, app profiles, Bridge) ----------
+
+    fun setControl(mode: com.bikeos.core.control.ControlMode) {
+        _state.value = _state.value.copy(control = mode)
+    }
+
+    fun nudgeControl(up: Boolean) = setControl(_state.value.control.nudge(up))
+
+    fun cycleControl() {
+        val st = _state.value
+        setControl(
+            com.bikeos.core.control.ControlMode.cycle(
+                st.control, settings.current.ftp, st.sample.heartRateBpm != null, st.sample.resistancePct.roundToInt(),
+            ),
+        )
+    }
+
+    fun setOverlayHidden(hidden: Boolean) {
+        _state.value = _state.value.copy(overlayHidden = hidden)
+    }
+
+    /** A command from another app on the bike (already permission-checked and range-validated). */
+    fun applyBridge(cmd: com.bikeos.core.control.BridgeCommand, app: String) {
+        val label = app.ifBlank { "App" }
+        when (cmd) {
+            is com.bikeos.core.control.BridgeCommand.SetPower -> _state.value = _state.value.copy(bridgeTarget = label to TrainerTarget.Erg(cmd.watts))
+            is com.bikeos.core.control.BridgeCommand.SetResistance -> _state.value = _state.value.copy(bridgeTarget = label to TrainerTarget.Resistance(cmd.level.toFloat()))
+            is com.bikeos.core.control.BridgeCommand.SetGrade -> _state.value = _state.value.copy(bridgeTarget = label to TrainerTarget.Simulation(cmd.percent))
+            com.bikeos.core.control.BridgeCommand.Clear -> _state.value = _state.value.copy(bridgeTarget = null)
+            com.bikeos.core.control.BridgeCommand.StartRide -> if (!_state.value.active) justRide(label)
+            com.bikeos.core.control.BridgeCommand.PauseRide -> pause()
+            com.bikeos.core.control.BridgeCommand.ResumeRide -> resume()
+            com.bikeos.core.control.BridgeCommand.EndRide -> finish()
+        }
+    }
 
     companion object {
         const val TICK_MS = 250L
@@ -189,11 +234,14 @@ class RideController(
             newFtp?.let { ftp -> settings.update { it.copy(ftp = ftp) } }
         }
         settings.saveResistanceModel(hub.resistanceModel)
+        autoPilot.reset()
+        followTrainerOverride = null
         _state.value = RideState(
             sample = s.sample,
             lastFinished = if (keep) record.summary() else null,
             powerHistory = s.powerHistory,
             trainerTarget = s.trainerTarget,
+            // Auto-pilot and app commands end with the ride, so the bike never keeps a target nobody asked for.
         )
     }
 
@@ -269,7 +317,8 @@ class RideController(
         val trainer = peripheral.target.value
         val controller = resistanceController(cfg.autoResistance, cfg.autoResistanceTxCode, cfg.autoResistanceMax)
         val automatic = controller.isAutomatic && !controller.faulted
-        val suggestion = suggestion(sample, progress, trainer, automatic)
+        val autoOut = autoPilot.update(st.control, sample.powerWatts, sample.cadenceRpm, sample.resistancePct, sample.heartRateBpm, dtSec)
+        val suggestion = suggestion(sample, progress, trainer, st.bridgeTarget, autoOut, automatic)
         if (automatic && suggestion != null && st.phase != RidePhase.PAUSED) {
             controller.setTarget(suggestion.resistance, sample.resistancePct, sample.cadenceRpm, hub.isFresh)
         }
@@ -320,16 +369,28 @@ class RideController(
     /** Surfaces in Settings when auto-resistance gave up after failures. */
     val autoResistanceFaulted: Boolean get() = resistanceController.faulted
 
-    private fun suggestion(sample: BikeSample, progress: WorkoutProgress?, trainer: TrainerTarget, automatic: Boolean): Suggestion? {
+    /**
+     * Who controls the bike, highest priority first:
+     *  1. a Bluetooth trainer app (Zwift, Rouvy…) sending ERG/SIM/resistance,
+     *  2. another app on the bike via the BikeOS Bridge,
+     *  3. the rider's auto-pilot (overlay / app profile),
+     *  4. the structured class's targets.
+     */
+    private fun suggestion(
+        sample: BikeSample, progress: WorkoutProgress?, trainer: TrainerTarget,
+        bridge: Pair<String, TrainerTarget>?, autoOut: com.bikeos.core.control.ControlOutput?, automatic: Boolean,
+    ): Suggestion? {
         val cfg = settings.current
         val model = hub.resistanceModel
-        val fromTrainer = if (cfg.followTrainerApps) when (trainer) {
-            is TrainerTarget.Erg -> Suggestion(model.resistanceFor(trainer.watts.toFloat(), sample.cadenceRpm), "ERG ${trainer.watts} W", automatic)
-            is TrainerTarget.Simulation -> Suggestion(cfg.terrain.resistanceForGrade(trainer.gradePct), "Grade %.1f%%".format(trainer.gradePct), automatic)
-            is TrainerTarget.Resistance -> Suggestion(trainer.level.coerceIn(0f, 100f), "App resistance", automatic)
+        fun fromTarget(t: TrainerTarget, who: String): Suggestion? = when (t) {
+            is TrainerTarget.Erg -> Suggestion(model.resistanceFor(t.watts.toFloat(), sample.cadenceRpm), "$who · ERG ${t.watts} W", automatic)
+            is TrainerTarget.Simulation -> Suggestion(cfg.terrain.resistanceForGrade(t.gradePct), "$who · grade %.1f%%".format(t.gradePct), automatic)
+            is TrainerTarget.Resistance -> Suggestion(t.level.coerceIn(0f, 100f), "$who · resistance ${t.level.roundToInt()}", automatic)
             TrainerTarget.None -> null
-        } else null
-        if (fromTrainer != null) return fromTrainer
+        }
+        if (followTrainerOverride ?: cfg.followTrainerApps) fromTarget(trainer, "Trainer app")?.let { return it }
+        bridge?.let { (app, t) -> fromTarget(t, app)?.let { return it } }
+        autoOut?.let { return Suggestion(it.resistance, "Auto-pilot · ${it.reason}", automatic) }
 
         val seg = progress?.segment ?: return null
         seg.resistance?.let { range ->

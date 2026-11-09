@@ -1,6 +1,7 @@
 package com.bikeos.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -158,6 +161,7 @@ fun LiveRideScreen(nav: Navigator) {
                         }
                     }
                 }
+                AutoPilotCard()
                 ride.targetScore?.let {
                     SurfaceCard(Modifier.fillMaxWidth(), padding = 16.dp) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -284,6 +288,7 @@ fun LiveRideScreen(nav: Navigator) {
                         ServiceCard(app) {
                             pickApp = false
                             g.ride.setCompanionApp(app.label)
+                            g.applyProfile(app.id, app.label)
                             g.catalog.launch(app)
                         }
                     }
@@ -323,3 +328,53 @@ fun describe(seg: Segment, ftp: Int): String = buildList {
     seg.powerZone?.let { z -> PowerZones.targetBand(z, ftp).let { add("Z$z ${it.first}-${it.last} W") } }
     add(Format.clock(seg.durationSec))
 }.joinToString(" · ")
+
+/** Auto-pilot: let BikeOS steer the bike (power, resistance or heart-rate zone) underneath any app or video. */
+@Composable
+fun AutoPilotCard(modifier: Modifier = Modifier) {
+    val g = LocalContext.current.graph
+    val ride by g.ride.state.collectAsStateWithLifecycle()
+    val settings by g.settings.state.collectAsStateWithLifecycle()
+    val mode = ride.control
+    SurfaceCard(modifier.fillMaxWidth(), padding = 16.dp) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Auto-pilot", style = MaterialTheme.typography.titleMedium, color = BikeColors.Text, modifier = Modifier.weight(1f))
+                ride.bridgeTarget?.let { (app, _) -> Text("App: $app", style = MaterialTheme.typography.labelMedium, color = BikeColors.Ice) }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val ftp = settings.ftp
+                val res = ride.sample.resistancePct.roundToInt()
+                ModeChip("Off", mode is com.bikeos.core.control.ControlMode.Off) { g.ride.setControl(com.bikeos.core.control.ControlMode.Off) }
+                ModeChip("Power", mode is com.bikeos.core.control.ControlMode.TargetPower) {
+                    g.ride.setControl(com.bikeos.core.control.ControlMode.TargetPower((ftp * 0.65f).roundToInt().coerceIn(60, 400)))
+                }
+                ModeChip("Resistance", mode is com.bikeos.core.control.ControlMode.FixedResistance) {
+                    g.ride.setControl(com.bikeos.core.control.ControlMode.FixedResistance(res.coerceIn(10, 80)))
+                }
+                ModeChip("HR", mode is com.bikeos.core.control.ControlMode.HeartRateZone) {
+                    g.ride.setControl(com.bikeos.core.control.ControlMode.HeartRateZone(125, 145))
+                }
+            }
+            if (mode !is com.bikeos.core.control.ControlMode.Off) {
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconCircleButton(androidx.compose.material.icons.Icons.Default.Remove, "Easier", size = 44.dp) { g.ride.nudgeControl(false) }
+                    Text(mode.label, fontFamily = BikeFonts.Display, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, color = BikeColors.Accent,
+                        modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    IconCircleButton(androidx.compose.material.icons.Icons.Default.Add, "Harder", size = 44.dp) { g.ride.nudgeControl(true) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModeChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text, style = MaterialTheme.typography.labelLarge, color = if (selected) Color.Black else BikeColors.Text,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(if (selected) Color.White else BikeColors.SurfaceHigher)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+    )
+}

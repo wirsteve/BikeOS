@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">BikeOS</string>
+    <string name="perm_control_label">control your bike</string>
+    <string name="perm_control_desc">Set your bike\'s resistance, target power or virtual grade, and start or stop rides in BikeOS.</string>
+    <string name="perm_read_label">read your ride metrics</string>
+    <string name="perm_read_desc">Read live power, cadence, resistance and heart rate from BikeOS.</string>
 </resources>

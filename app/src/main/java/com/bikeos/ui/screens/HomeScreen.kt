@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -105,6 +106,7 @@ fun HomeScreen(nav: Navigator) {
 
     fun open(app: CatalogApp) {
         g.ride.setCompanionApp(app.label.takeIf { app.section == AppSection.WATCH || app.section == AppSection.LISTEN })
+        if (app.special == null) g.applyProfile(app.id, app.label)
         when (val r = g.catalog.launch(app)) {
             is AppCatalog.LaunchResult.ShowInfo -> nav.go(Screen.AppleFitness)
             is AppCatalog.LaunchResult.NeedsInstall -> needsInstall = r.app
@@ -396,6 +398,8 @@ private fun LiveNumber(label: String, value: String, color: Color, modifier: Mod
 private fun AppsTab(nav: Navigator, open: (CatalogApp) -> Unit) {
     val g = LocalContext.current.graph
     val settings by g.settings.state.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf<CatalogApp?>(null) }
+    editing?.let { app -> RideProfileDialog(app.id, app.label) { editing = null } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 40.dp, vertical = 12.dp)) {
         if (settings.pinnedApps.isNotEmpty()) {
             RowHeader("Pinned")
@@ -412,8 +416,12 @@ private fun AppsTab(nav: Navigator, open: (CatalogApp) -> Unit) {
             val apps = g.catalog.entries.filter { it.section == section && it.id !in settings.hiddenCatalogIds }
             if (apps.isEmpty()) return@forEach
             RowHeader(section.title)
+            if (section == AppSection.FITNESS) {
+                Text("Long-press any app to set its ride profile: what the bike does while that app is open.",
+                    style = MaterialTheme.typography.bodyMedium, color = BikeColors.TextDim, modifier = Modifier.padding(bottom = 12.dp))
+            }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                apps.forEach { app -> ServiceCard(app) { open(app) } }
+                apps.forEach { app -> ServiceCard(app, onLongClick = { editing = app }) { open(app) } }
                 if (section == AppSection.TOOLS) {
                     ServiceCardRaw("All apps", BikeColors.SurfaceHigher, null, Icons.Default.Apps, "Everything installed") { nav.go(Screen.AllApps) }
                 }
@@ -436,7 +444,7 @@ private fun sectionIcon(s: AppSection): ImageVector = when (s) {
 }
 
 @Composable
-fun ServiceCard(app: CatalogApp, onClick: () -> Unit) {
+fun ServiceCard(app: CatalogApp, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val g = LocalContext.current.graph
     val tick by g.clock.collectAsStateWithLifecycle()
     val pkg = remember(app, tick / 10_000) { g.catalog.installedPackage(app) }
@@ -446,17 +454,21 @@ fun ServiceCard(app: CatalogApp, onClick: () -> Unit) {
         app.webUrl != null -> "Web"
         else -> "Get app"
     }
-    ServiceCardRaw(app.label, app.color, pkg?.let(g.catalog::icon), if (app.webUrl != null && pkg == null) Icons.Default.Language else sectionIcon(app.section), status, onClick)
+    ServiceCardRaw(app.label, app.color, pkg?.let(g.catalog::icon), if (app.webUrl != null && pkg == null) Icons.Default.Language else sectionIcon(app.section), status, onClick, onLongClick)
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun ServiceCardRaw(label: String, color: Color, icon: android.graphics.drawable.Drawable?, fallback: ImageVector, status: String, onClick: () -> Unit) {
+fun ServiceCardRaw(
+    label: String, color: Color, icon: android.graphics.drawable.Drawable?, fallback: ImageVector, status: String,
+    onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
+) {
     val bitmap = remember(icon) { icon?.let { runCatching { it.toBitmap(144, 144).asImageBitmap() }.getOrNull() } }
     Box(
         Modifier.width(232.dp).height(132.dp).clip(RoundedCornerShape(22.dp))
             .background(Brush.linearGradient(listOf(color.copy(alpha = 0.55f), BikeColors.SurfaceHigh, BikeColors.Surface)))
             .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
-            .clickable(onClick = onClick).padding(16.dp),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(16.dp),
     ) {
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.25f)), contentAlignment = Alignment.Center) {
             if (bitmap != null) Image(bitmap, null, Modifier.size(36.dp)) else Icon(fallback, null, tint = Color.White, modifier = Modifier.size(24.dp))
@@ -570,4 +582,83 @@ private fun VideoPromoCard(title: String, kind: String, scenic: Boolean, onClick
         Text(kind.uppercase(), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.align(Alignment.TopEnd))
         Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, modifier = Modifier.align(Alignment.BottomStart))
     }
+}
+
+/** Per-app ride profile editor. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun RideProfileDialog(appKey: String, label: String, onDismiss: () -> Unit) {
+    val g = LocalContext.current.graph
+    val settings by g.settings.state.collectAsStateWithLifecycle()
+    val current = settings.appProfiles[appKey] ?: com.bikeos.core.control.AppProfile(appKey)
+    var overlay by remember { mutableStateOf(current.overlay) }
+    var program by remember { mutableStateOf(current.program) }
+    var follow by remember { mutableStateOf(current.followTrainer) }
+    val workouts by g.workouts.all.collectAsStateWithLifecycle()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = BikeColors.SurfaceHigh,
+        title = { Text("Ride profile · $label") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("When you open $label from BikeOS:", color = BikeColors.TextDim)
+                Text("STATS OVERLAY", style = MaterialTheme.typography.labelSmall, color = BikeColors.TextDim)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    com.bikeos.core.control.OverlayStyle.entries.forEach { o ->
+                        ChoiceChip(o.name.lowercase().replaceFirstChar(Char::uppercase), overlay == o) { overlay = o }
+                    }
+                }
+                Text("THE BIKE", style = MaterialTheme.typography.labelSmall, color = BikeColors.TextDim)
+                val power = (program as? com.bikeos.core.control.ProfileProgram.Control)?.mode as? com.bikeos.core.control.ControlMode.TargetPower
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ChoiceChip("Nothing", program is com.bikeos.core.control.ProfileProgram.None) { program = com.bikeos.core.control.ProfileProgram.None }
+                    ChoiceChip("Record a ride", program is com.bikeos.core.control.ProfileProgram.JustRide) { program = com.bikeos.core.control.ProfileProgram.JustRide }
+                    ChoiceChip("Hold power", power != null) {
+                        program = com.bikeos.core.control.ProfileProgram.Control(com.bikeos.core.control.ControlMode.TargetPower((settings.ftp * 0.65f).roundToInt()))
+                    }
+                    ChoiceChip("Heart-rate zone", (program as? com.bikeos.core.control.ProfileProgram.Control)?.mode is com.bikeos.core.control.ControlMode.HeartRateZone) {
+                        program = com.bikeos.core.control.ProfileProgram.Control(com.bikeos.core.control.ControlMode.HeartRateZone(125, 145))
+                    }
+                    ChoiceChip("Run a class", program is com.bikeos.core.control.ProfileProgram.Workout) {
+                        program = com.bikeos.core.control.ProfileProgram.Workout(workouts.first { it.id != WorkoutLibrary.justRide.id }.id)
+                    }
+                }
+                if (power != null) {
+                    Stepper("${power.watts} W", {
+                        program = com.bikeos.core.control.ProfileProgram.Control(power.nudge(false))
+                    }, { program = com.bikeos.core.control.ProfileProgram.Control(power.nudge(true)) })
+                }
+                (program as? com.bikeos.core.control.ProfileProgram.Workout)?.let { wp ->
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        workouts.filter { it.id != WorkoutLibrary.justRide.id }.forEach { w ->
+                            ChoiceChip(w.title, wp.workoutId == w.id) { program = com.bikeos.core.control.ProfileProgram.Workout(w.id) }
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Let trainer apps control resistance", color = BikeColors.Text)
+                        Text("ERG / hills from Zwift, Rouvy and other Bluetooth apps", style = MaterialTheme.typography.bodySmall, color = BikeColors.TextDim)
+                    }
+                    androidx.compose.material3.Switch(follow, { follow = it })
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                g.settings.update { it.copy(appProfiles = it.appProfiles + (appKey to com.bikeos.core.control.AppProfile(appKey, overlay, program, follow))) }
+                onDismiss()
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text, style = MaterialTheme.typography.labelLarge, color = if (selected) Color.Black else BikeColors.Text,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(if (selected) Color.White else BikeColors.SurfaceHigher)
+            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
+    )
 }
