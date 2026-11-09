@@ -153,6 +153,32 @@ Apple only makes Fitness+ for iPhone, iPad and Apple TV, so there's no Android a
 4. **Stats on your iPhone/iPad (optional).** Turn on the Wi-Fi dashboard and open the address it shows in Safari.
 5. **Start ride & open AirPlay.** BikeOS starts recording, switches the overlay to compact and opens the receiver.
 
+### Apps that control the bike
+Whichever app is on screen, BikeOS can steer the bike. Control comes from these sources, highest priority first:
+1. **Bluetooth trainer apps** (Zwift, Rouvy, MyWhoosh, TrainerRoad, Kinomap) on a phone, iPad, Apple TV or computer. They pair with "BikeOS Bike" and send ERG (watts) and SIM (hills) commands.
+2. **Apps on the bike itself**, via the **BikeOS Bridge** ([docs/BRIDGE.md](docs/BRIDGE.md)). They can read live metrics and set power, resistance or grade. Android asks you to approve each app first.
+3. **Auto-pilot**, which works underneath any app (YouTube, Netflix, Peloton web, a video ride):
+   - **Hold power:** BikeOS's own ERG, which corrects itself until you're at the target.
+   - **Fixed resistance.**
+   - **Heart-rate zone:** resistance steps up or down to keep you in the zone.
+   
+   The floating overlay has the mode switch and −/+ buttons, so you can adjust without leaving the app.
+4. **Class targets** from a BikeOS class.
+
+**Ride profiles:** long-press any app in **Apps** to choose what happens when you open it from BikeOS:
+- the overlay style (full, compact or hidden)
+- what the bike does (nothing, record, hold a power, a heart-rate zone, or run a class)
+- whether Bluetooth trainer apps may steer it
+
+Defaults:
+- **Zwift and other trainer apps:** record a ride with a compact overlay, and follow the app's resistance commands.
+- **Netflix and YouTube:** record a ride.
+- **Peloton:** hidden overlay; nothing starts.
+
+On a **Bike+** with auto-resistance enabled, all of this drives the resistance motor through the safety limiter. On the **Bike**, it becomes "turn the knob to NN" coaching.
+
+![Auto-pilot](docs/screenshots/autopilot.png)
+
 ### Video rides
 The **Videos** tab plays video full-screen with your ride on top: a live metric bar, class targets with a countdown, resistance coaching, and automatic recording.
 - **Ride-along classes and scenic rides:** curated YouTube searches open inside BikeOS. Tap any result to ride along. YouTube plays through its official embedded player. A few uploaders block embedding; for those BikeOS offers "Open in YouTube".
