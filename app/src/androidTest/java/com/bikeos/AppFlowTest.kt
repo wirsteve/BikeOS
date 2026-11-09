@@ -205,10 +205,10 @@ class AppFlowTest {
         compose.waitUntil(10_000) { g.sensors.status.value.state == com.bikeos.sensor.SensorState.CONNECTED }
         compose.onNodeWithText("Just Ride").performScrollTo().performClick()
         waitForText("Auto-pilot")
-        compose.onNodeWithText("Power").performScrollTo().performClick()
+        compose.onNodeWithText("Power").performClick()
         compose.waitUntil(5_000) { g.ride.state.value.control is com.bikeos.core.control.ControlMode.TargetPower }
         val before = (g.ride.state.value.control as com.bikeos.core.control.ControlMode.TargetPower).watts
-        compose.onNodeWithContentDescription("Harder").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Harder").performClick()
         compose.waitUntil(5_000) { (g.ride.state.value.control as? com.bikeos.core.control.ControlMode.TargetPower)?.watts == before + 10 }
         compose.waitUntil(5_000) { g.ride.state.value.suggestion?.reason?.startsWith("Auto-pilot") == true }
         shot("autopilot")
