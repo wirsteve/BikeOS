@@ -454,14 +454,14 @@ fun ServiceCard(app: CatalogApp, onLongClick: (() -> Unit)? = null, onClick: () 
         app.webUrl != null -> "Web"
         else -> "Get app"
     }
-    ServiceCardRaw(app.label, app.color, pkg?.let(g.catalog::icon), if (app.webUrl != null && pkg == null) Icons.Default.Language else sectionIcon(app.section), status, onClick, onLongClick)
+    ServiceCardRaw(app.label, app.color, pkg?.let(g.catalog::icon), if (app.webUrl != null && pkg == null) Icons.Default.Language else sectionIcon(app.section), status, onLongClick = onLongClick, onClick = onClick)
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ServiceCardRaw(
     label: String, color: Color, icon: android.graphics.drawable.Drawable?, fallback: ImageVector, status: String,
-    onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null, onClick: () -> Unit,
 ) {
     val bitmap = remember(icon) { icon?.let { runCatching { it.toBitmap(144, 144).asImageBitmap() }.getOrNull() } }
     Box(
